@@ -26,7 +26,7 @@ import { INPUT_WIDGET_DEFAULT_VALIDATION_ERROR } from "constants/messages";
  * All generic logic like max characters for phone numbers should be 10, should go in the widget
  */
 
-const InputComponentWrapper = styled(props => (
+const InputComponentWrapper = styled((props) => (
   <ControlGroup {..._.omit(props, ["hasError", "numeric"])} />
 ))<{
   numeric: boolean;
@@ -39,10 +39,10 @@ const InputComponentWrapper = styled(props => (
       border: 1px solid;
       border-color: ${({ hasError }) =>
         hasError ? IntentColors.danger : Colors.GEYSER_LIGHT};
-      border-radius: ${props => props.theme.radii[1]}px;
-      height: ${props => (props.multiline === "true" ? "100%" : "inherit")};
+      border-radius: ${(props) => props.theme.radii[1]}px;
+      height: ${(props) => (props.multiline === "true" ? "100%" : "inherit")};
       width: 100%;
-      ${props =>
+      ${(props) =>
         props.numeric &&
         `
         border-top-right-radius: 0px;
@@ -136,6 +136,22 @@ class InputComponent extends React.Component<
         return "text";
     }
   }
+  onKeyDownTextArea = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    const isEnterKey = e.key === "Enter" || e.keyCode === 13;
+    const { disableNewLineOnPressEnterKey } = this.props;
+    if (isEnterKey && disableNewLineOnPressEnterKey && !e.shiftKey) {
+      e.preventDefault();
+    }
+    if (typeof this.props.onKeyDown === "function") {
+      this.props.onKeyDown(e);
+    }
+  };
+  onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (typeof this.props.onKeyDown === "function") {
+      this.props.onKeyDown(e);
+    }
+  };
+
   private numericInputComponent = () => (
     <NumericInput
       value={this.props.value}
@@ -155,6 +171,7 @@ class InputComponent extends React.Component<
       stepSize={this.props.stepSize}
       onFocus={() => this.setFocusState(true)}
       onBlur={() => this.setFocusState(false)}
+      onKeyDown={this.onKeyDown}
     />
   );
   private textAreaInputComponent = () => (
@@ -169,6 +186,7 @@ class InputComponent extends React.Component<
       growVertically={false}
       onFocus={() => this.setFocusState(true)}
       onBlur={() => this.setFocusState(false)}
+      onKeyDown={this.onKeyDownTextArea}
     />
   );
 
@@ -199,6 +217,7 @@ class InputComponent extends React.Component<
         type={this.getType(this.props.inputType)}
         onFocus={() => this.setFocusState(true)}
         onBlur={() => this.setFocusState(false)}
+        onKeyDown={this.onKeyDown}
       />
     );
   private renderInputComponent = (inputType: InputType, isTextArea: boolean) =>
@@ -267,6 +286,12 @@ export interface InputComponentProps extends ComponentProps {
   isInvalid: boolean;
   showError: boolean;
   onFocusChange: (state: boolean) => void;
+  disableNewLineOnPressEnterKey?: boolean;
+  onKeyDown?: (
+    e:
+      | React.KeyboardEvent<HTMLTextAreaElement>
+      | React.KeyboardEvent<HTMLInputElement>,
+  ) => void;
 }
 
 export default InputComponent;

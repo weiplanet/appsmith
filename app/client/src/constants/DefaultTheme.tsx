@@ -41,9 +41,18 @@ export enum Skin {
   DARK,
 }
 
+export const hideScrollbar = css`
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  &::-webkit-scrollbar {
+    display: none;
+    -webkit-appearance: none;
+  }
+`;
+
 export const scrollbarDark = css`
-  scrollbar-color: ${props => props.theme.colors.paneCard}
-    ${props => props.theme.colors.paneBG};
+  scrollbar-color: ${(props) => props.theme.colors.paneCard}
+    ${(props) => props.theme.colors.paneBG};
   scrollbar-width: thin;
   &::-webkit-scrollbar {
     width: 6px;
@@ -51,22 +60,29 @@ export const scrollbarDark = css`
 
   &::-webkit-scrollbar-track {
     box-shadow: inset 0 0 6px
-      ${props => getColorWithOpacity(props.theme.colors.paneBG, 0.3)};
+      ${(props) => getColorWithOpacity(props.theme.colors.paneBG, 0.3)};
   }
 
   &::-webkit-scrollbar-thumb {
-    background-color: ${props => props.theme.colors.paneCard};
-    border-radius: ${props => props.theme.radii[1]}px;
+    background-color: ${(props) => props.theme.colors.paneCard};
+    border-radius: ${(props) => props.theme.radii[1]}px;
   }
+`;
+
+export const getTypographyByKey = (props: Record<string, any>, key: string) => `
+  font-weight: ${props.theme.typography[key].fontWeight};
+  font-size: ${props.theme.typography[key].fontSize}px;
+  line-height: ${props.theme.typography[key].lineHeight}px;
+  letter-spacing: ${props.theme.typography[key].letterSpacing}px;
 `;
 
 export const BlueprintControlTransform = css`
   && {
     .${Classes.CONTROL} {
       & input:checked ~ .${Classes.CONTROL_INDICATOR} {
-        background: ${props => props.theme.colors.primaryOld};
+        background: ${(props) => props.theme.colors.primaryOld};
         box-shadow: none;
-        border: 2px solid ${props => props.theme.colors.primaryOld};
+        border: 2px solid ${(props) => props.theme.colors.primaryOld};
       }
       & input:not(:disabled):active ~ .${Classes.CONTROL_INDICATOR} {
         box-shadow: none;
@@ -168,7 +184,7 @@ export const BlueprintButtonIntentsCSS = css`
       color: ${IntentColors.none};
     }
     & span {
-      font-weight: ${props => props.theme.fontWeights[3]};
+      font-weight: ${(props) => props.theme.fontWeights[3]};
     }
     background: ${Colors.WHITE};
   }
@@ -231,11 +247,11 @@ export const BlueprintButtonIntentsCSS = css`
 export const BlueprintInputTransform = css`
   && {
     .${Classes.INPUT} {
-      border-radius: ${props => props.theme.radii[1]}px;
+      border-radius: ${(props) => props.theme.radii[1]}px;
       box-shadow: none;
-      border: ${props => getBorderCSSShorthand(props.theme.borders[2])};
+      border: ${(props) => getBorderCSSShorthand(props.theme.borders[2])};
       &:focus {
-        border: ${props => getBorderCSSShorthand(props.theme.borders[2])};
+        border: ${(props) => getBorderCSSShorthand(props.theme.borders[2])};
         box-shadow: none;
       }
     }
@@ -278,6 +294,7 @@ export type Theme = {
   };
   propertyPane: PropertyPaneTheme;
   headerHeight: string;
+  smallHeaderHeight: string;
   homePage: any;
   sidebarWidth: string;
   canvasPadding: string;
@@ -308,15 +325,13 @@ export type Theme = {
       inActiveBG: Color;
       inActiveText: Color;
       border: Color;
+      background: Color;
     };
   };
   authCard: {
     width: number;
-    borderRadius: number;
-    background: Color;
-    padding: number;
     dividerSpacing: number;
-    shadow: string;
+    formMessageWidth: number;
   };
   shadows: string[];
   widgets: {
@@ -398,7 +413,7 @@ export const getBorderCSSShorthand = (border?: ThemeBorder): string => {
 };
 
 export const labelStyle = css`
-  font-weight: ${props => props.theme.fontWeights[3]};
+  font-weight: ${(props) => props.theme.fontWeights[3]};
 `;
 
 // export const adsTheme: any = {
@@ -407,25 +422,47 @@ export const labelStyle = css`
 // 3, 7, 11, 26
 
 export const smallButton = css`
-  font-size: ${props => props.theme.typography.btnSmall.fontSize}px;
-  font-weight: ${props => props.theme.typography.btnSmall.fontWeight};
-  line-height: ${props => props.theme.typography.btnSmall.lineHeight}px;
-  letter-spacing: ${props => props.theme.typography.btnSmall.letterSpacing}px;
+  font-size: ${(props) => props.theme.typography.btnSmall.fontSize}px;
+  font-weight: ${(props) => props.theme.typography.btnSmall.fontWeight};
+  line-height: ${(props) => props.theme.typography.btnSmall.lineHeight}px;
+  letter-spacing: ${(props) => props.theme.typography.btnSmall.letterSpacing}px;
 `;
 
 export const mediumButton = css`
-  font-size: ${props => props.theme.typography.btnMedium.fontSize}px;
-  font-weight: ${props => props.theme.typography.btnMedium.fontWeight};
-  line-height: ${props => props.theme.typography.btnMedium.lineHeight}px;
-  letter-spacing: ${props => props.theme.typography.btnMedium.letterSpacing}px;
+  font-size: ${(props) => props.theme.typography.btnMedium.fontSize}px;
+  font-weight: ${(props) => props.theme.typography.btnMedium.fontWeight};
+  line-height: ${(props) => props.theme.typography.btnMedium.lineHeight}px;
+  letter-spacing: ${(props) =>
+    props.theme.typography.btnMedium.letterSpacing}px;
 `;
 
 export const largeButton = css`
-  font-size: ${props => props.theme.typography.btnLarge.fontSize}px;
-  font-weight: ${props => props.theme.typography.btnLarge.fontWeight};
-  line-height: ${props => props.theme.typography.btnLarge.lineHeight}px;
-  letter-spacing: ${props => props.theme.typography.btnLarge.letterSpacing}px;
+  font-size: ${(props) => props.theme.typography.btnLarge.fontSize}px;
+  font-weight: ${(props) => props.theme.typography.btnLarge.fontWeight};
+  line-height: ${(props) => props.theme.typography.btnLarge.lineHeight}px;
+  letter-spacing: ${(props) => props.theme.typography.btnLarge.letterSpacing}px;
 `;
+
+export const appColors = [
+  "#6C4CF1",
+  "#4F70FD",
+  "#F56AF4",
+  "#B94CF1",
+  "#54A9FB",
+  "#5ED3DA",
+  "#5EDA82",
+  "#A8D76C",
+  "#E9C951",
+  "#FE9F44",
+  "#ED86A1",
+  "#EA6179",
+  "#C03C3C",
+  "#BC6DB2",
+  "#6C9DD0",
+  "#6CD0CF",
+] as const;
+
+export type AppColorCode = typeof appColors[number];
 
 const darkShades = [
   "#1A191C",
@@ -481,11 +518,10 @@ type ColorType = {
     hoverBorder: ShadeColor;
     iconColor: ShadeColor;
   };
-  appCardColors: string[];
   text: {
     normal: ShadeColor;
     heading: ShadeColor;
-    hightlight: ShadeColor;
+    highlight: ShadeColor;
   };
   icon: {
     normal: ShadeColor;
@@ -658,6 +694,10 @@ type ColorType = {
     };
     manageUser: ShadeColor;
     scrollbar: ShadeColor;
+    separator: ShadeColor;
+    title: ShadeColor;
+    link: string;
+    hoverState: ShadeColor;
   };
   tagInput: {
     bg: ShadeColor;
@@ -690,12 +730,84 @@ type ColorType = {
     light: ShadeColor;
     dark: ShadeColor;
   };
+  filePicker: {
+    bg: ShadeColor;
+    color: ShadeColor;
+    progress: ShadeColor;
+    shadow: {
+      from: string;
+      to: string;
+    };
+  };
   formFooter: {
     cancelBtn: ShadeColor;
   };
+  toast: {
+    undo: string;
+    warningColor: string;
+    dangerColor: string;
+    textColor: string;
+    bg: ShadeColor;
+  };
+  floatingBtn: any;
+  auth: any;
+  formMessage: Record<string, Record<Intent, string>>;
+  header: {
+    separator: string;
+    appName: ShadeColor;
+    background: string;
+    deployToolTipBackground: string;
+    deployToolTipText: ShadeColor;
+    shareBtnHighlight: string;
+    shareBtn: string;
+    tabsHorizontalSeparator: string;
+    tabText: string;
+    activeTabBorderBottom: string;
+    activeTabText: string;
+  };
+};
+
+const auth: any = {
+  background: darkShades[1],
+  cardBackground: lightShades[10],
+  btnPrimary: "#F86A2B",
+  inputBackground: darkShades[1],
+  headingText: "#FFF",
+  link: "#106ba3",
+  text: darkShades[7],
+  placeholder: darkShades[5],
+  socialBtnText: darkShades[8],
+  socialBtnBorder: darkShades[8],
+  socialBtnHighlight: darkShades[1],
+};
+
+const formMessage = {
+  background: {
+    danger: "rgba(226,44,44,0.08)",
+    success: "#172320",
+    warning: "rgba(224, 179, 14, 0.08)",
+  },
+  text: {
+    danger: "#E22C2C",
+    success: "#03B365",
+    warning: "#E0B30E",
+  },
 };
 
 export const dark: ColorType = {
+  header: {
+    separator: darkShades[4],
+    appName: darkShades[7],
+    background: darkShades[2],
+    deployToolTipBackground: lightShades[10],
+    deployToolTipText: darkShades[7],
+    shareBtnHighlight: "#F86A2B",
+    shareBtn: "#fff",
+    tabsHorizontalSeparator: "#EFEFEF",
+    tabText: "#6F6D6D",
+    activeTabBorderBottom: "#FF6D2D",
+    activeTabText: "#000",
+  },
   button: {
     disabledText: darkShades[6],
   },
@@ -741,21 +853,10 @@ export const dark: ColorType = {
     hoverBorder: darkShades[4],
     iconColor: darkShades[9],
   },
-  appCardColors: [
-    "#4F70FD",
-    "#54A9FB",
-    "#5ED3DA",
-    "#F56AF4",
-    "#F36380",
-    "#FE9F44",
-    "#E9C951",
-    "#A8D76C",
-    "#6C4CF1",
-  ],
   text: {
     normal: darkShades[6],
     heading: darkShades[7],
-    hightlight: darkShades[9],
+    highlight: darkShades[9],
   },
   icon: {
     normal: darkShades[6],
@@ -832,8 +933,8 @@ export const dark: ColorType = {
     },
     normal: {
       bg: darkShades[0],
-      text: darkShades[9],
       border: darkShades[0],
+      text: darkShades[7],
     },
     placeholder: darkShades[5],
     readOnly: {
@@ -928,6 +1029,10 @@ export const dark: ColorType = {
     },
     manageUser: darkShades[6],
     scrollbar: darkShades[5],
+    separator: darkShades[4],
+    title: darkShades[8],
+    link: "#F86A2B",
+    hoverState: darkShades[3],
   },
   tagInput: {
     bg: darkShades[0],
@@ -960,12 +1065,48 @@ export const dark: ColorType = {
     light: darkShades[2],
     dark: darkShades[4],
   },
+  filePicker: {
+    bg: darkShades[1],
+    color: darkShades[7],
+    progress: darkShades[6],
+    shadow: {
+      from: "rgba(21, 17, 17, 0.0001)",
+      to: "rgba(9, 7, 7, 0.883386)",
+    },
+  },
   formFooter: {
     cancelBtn: darkShades[9],
   },
+  toast: {
+    undo: "#CB4810",
+    warningColor: "#E0B30E",
+    dangerColor: "#E22C2C",
+    textColor: "#090707",
+    bg: darkShades[8],
+  },
+  floatingBtn: {
+    tagBackground: "#e22c2c",
+    backgroundColor: darkShades[3],
+    iconColor: darkShades[6],
+  },
+  auth,
+  formMessage,
 };
 
 export const light: ColorType = {
+  header: {
+    separator: "#E0DEDE",
+    appName: lightShades[8],
+    background: lightShades[0],
+    deployToolTipText: lightShades[8],
+    deployToolTipBackground: "#FFF",
+    shareBtnHighlight: "#F86A2B",
+    shareBtn: "#4B4848",
+    tabsHorizontalSeparator: "#EFEFEF",
+    tabText: "#6F6D6D",
+    activeTabBorderBottom: "#FF6D2D",
+    activeTabText: "#000",
+  },
   button: {
     disabledText: lightShades[6],
   },
@@ -1011,21 +1152,10 @@ export const light: ColorType = {
     hoverBorder: lightShades[2],
     iconColor: lightShades[11],
   },
-  appCardColors: [
-    "#4266FD",
-    "#69B5FF",
-    "#5CE7EF",
-    "#61DF48",
-    "#FF6786",
-    "#FFAD5E",
-    "#FCD43E",
-    "#B0E968",
-    "#9177FF",
-  ],
   text: {
     normal: lightShades[8],
     heading: lightShades[9],
-    hightlight: lightShades[11],
+    highlight: lightShades[11],
   },
   icon: {
     normal: lightShades[4],
@@ -1198,6 +1328,10 @@ export const light: ColorType = {
     },
     manageUser: lightShades[6],
     scrollbar: lightShades[5],
+    separator: lightShades[4],
+    title: lightShades[8],
+    link: "#F86A2B",
+    hoverState: lightShades[3],
   },
   tagInput: {
     bg: lightShades[2],
@@ -1230,15 +1364,38 @@ export const light: ColorType = {
     light: lightShades[2],
     dark: lightShades[4],
   },
+  filePicker: {
+    bg: lightShades[2],
+    color: lightShades[7],
+    progress: lightShades[6],
+    shadow: {
+      from: "rgba(253, 253, 253, 0.0001)",
+      to: "rgba(250, 250, 250, 0.898847)",
+    },
+  },
   formFooter: {
     cancelBtn: lightShades[9],
   },
+  toast: {
+    undo: "#F86A2B",
+    warningColor: "#DCAD00",
+    dangerColor: "#F22B2B",
+    textColor: "#F7F7F7",
+    bg: lightShades[10],
+  },
+  floatingBtn: {
+    tagBackground: "#e22c2c",
+    backgroundColor: lightShades[3],
+    iconColor: lightShades[7],
+  },
+  auth,
+  formMessage,
 };
 
 export const theme: Theme = {
   radii: [0, 4, 8, 10, 20, 50],
   fontSizes: [0, 10, 12, 14, 16, 18, 24, 28, 32, 48, 64],
-  spaces: [0, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 30, 36],
+  spaces: [0, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 30, 36, 38, 40, 42, 44],
   fontWeights: [0, 400, 500, 700],
   typography: {
     h1: {
@@ -1313,6 +1470,30 @@ export const theme: Theme = {
       letterSpacing: 0.4,
       fontWeight: 600,
     },
+    floatingBtn: {
+      fontSize: 14,
+      lineHeight: 17,
+      letterSpacing: -0.24,
+      fontWeight: "normal",
+    },
+    releaseList: {
+      fontSize: 14,
+      lineHeight: 23,
+      letterSpacing: -0.24,
+      fontWeight: "normal",
+    },
+    authCardHeader: {
+      fontStyle: "normal",
+      fontWeight: 600,
+      fontSize: 25,
+      lineHeight: 20,
+    },
+    authCardSubheader: {
+      fontStyle: "normal",
+      fontWeight: "normal",
+      fontSize: 15,
+      lineHeight: 20,
+    },
   },
   iconSizes: {
     XXS: 8,
@@ -1380,6 +1561,7 @@ export const theme: Theme = {
     cmBacground: Colors.BLUE_CHARCOAL,
     lightningborder: Colors.ALABASTER,
     formButtonColor: Colors.WHITE,
+    appCardColors: appColors,
   },
   lineHeights: [0, 14, 16, 18, 22, 24, 28, 36, 48, 64, 80],
   fonts: {
@@ -1427,6 +1609,7 @@ export const theme: Theme = {
     },
   },
   headerHeight: "48px",
+  smallHeaderHeight: "35px",
   canvasPadding: "20px 0 200px 0",
   sideNav: {
     maxWidth: 220,
@@ -1459,15 +1642,13 @@ export const theme: Theme = {
       inActiveBG: Colors.BLUE_CHARCOAL,
       inActiveText: Colors.WHITE,
       border: Colors.TROUT_DARK,
+      background: darkShades[4],
     },
   },
   authCard: {
-    width: 612,
-    borderRadius: 16,
-    background: Colors.WHITE,
-    padding: 40,
+    width: 440,
     dividerSpacing: 32,
-    shadow: "0px 4px 8px rgba(9, 30, 66, 0.25)",
+    formMessageWidth: 370,
   },
   shadows: [
     /* 0. tab */
@@ -1538,8 +1719,7 @@ export const theme: Theme = {
 };
 
 export const scrollbarLight = css<{ backgroundColor?: Color }>`
-  scrollbar-color: ${props => props.theme.colors.paneText}
-
+  scrollbar-color: ${(props) => props.theme.colors.paneText}
   scrollbar-width: thin;
   &::-webkit-scrollbar {
     width: 4px;
@@ -1547,14 +1727,14 @@ export const scrollbarLight = css<{ backgroundColor?: Color }>`
   }
   &::-webkit-scrollbar-track {
     box-shadow: inset 0 0 6px
-      ${props =>
+      ${(props) =>
         props.backgroundColor
           ? props.backgroundColor
           : getColorWithOpacity(props.theme.colors.paneText, 0.3)};
   }
   &::-webkit-scrollbar-thumb {
-    background-color: ${props => props.theme.colors.paneText};
-    border-radius: ${props => props.theme.radii[1]}px;
+    background-color: ${(props) => props.theme.colors.paneText};
+    border-radius: ${(props) => props.theme.radii[1]}px;
   }
 `;
 

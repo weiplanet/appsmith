@@ -22,12 +22,13 @@ import {
   changeOrgUserRole,
   deleteOrgUser,
 } from "actions/orgActions";
-import Button, { Size, Variant } from "components/ads/Button";
+import Button, { Size } from "components/ads/Button";
 import TableDropdown from "components/ads/TableDropdown";
 import { TextType } from "components/ads/Text";
 import { SettingsHeading } from "./General";
 import styled from "styled-components";
 import { Classes } from "@blueprintjs/core";
+import { Variant } from "components/ads/common";
 
 export type PageProps = RouteComponentProps<{
   orgId: string;
@@ -61,9 +62,11 @@ export default function MemberSettings(props: PageProps) {
   } = useSelector(getOrgLoadingStates);
   const allUsers = useSelector(getAllUsers);
   const currentUser = useSelector(getCurrentUser);
-  const currentOrg = useSelector(getCurrentOrg);
+  const currentOrg = useSelector(getCurrentOrg).filter(
+    (el) => el.id === orgId,
+  )[0];
 
-  const userTableData = allUsers.map(user => ({
+  const userTableData = allUsers.map((user) => ({
     ...user,
     isCurrentUser: user.username === currentUser?.username,
   }));
@@ -83,7 +86,7 @@ export default function MemberSettings(props: PageProps) {
       Cell: function DropdownCell(cellProps: any) {
         const allRoles = useSelector(getAllRoles);
         const roles = allRoles
-          ? Object.keys(allRoles).map(role => {
+          ? Object.keys(allRoles).map((role) => {
               return {
                 name: role,
                 desc: allRoles[role],
@@ -109,7 +112,7 @@ export default function MemberSettings(props: PageProps) {
               roleChangingUserInfo.username ===
                 cellProps.cell.row.values.username
             }
-            onSelect={option => {
+            onSelect={(option) => {
               dispatch(
                 changeOrgUserRole(
                   orgId,
@@ -125,6 +128,7 @@ export default function MemberSettings(props: PageProps) {
     {
       Header: "Delete",
       accessor: "delete",
+      disableSortBy: true,
       Cell: function DeleteCell(cellProps: any) {
         if (
           cellProps.cell.row.values.username ===

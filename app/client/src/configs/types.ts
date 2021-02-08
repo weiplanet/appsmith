@@ -5,8 +5,6 @@ export type SentryConfig = {
   environment: string;
 };
 
-type Milliseconds = number;
-
 export enum FeatureFlagsEnum {}
 
 export type FeatureFlags = Record<FeatureFlagsEnum, boolean>;
@@ -36,6 +34,10 @@ export type AppsmithUIConfigs = {
     enabled: boolean;
     apiKey: string;
     ceKey: string;
+  };
+  fusioncharts: {
+    enabled: boolean;
+    licenseKey: string;
   };
   algolia: {
     enabled: boolean;

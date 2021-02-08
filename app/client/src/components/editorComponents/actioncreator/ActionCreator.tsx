@@ -25,6 +25,7 @@ import {
   createNewApiAction,
   createNewQueryAction,
 } from "actions/apiPaneActions";
+import { NavigationTargetType } from "../../../sagas/ActionExecutionSagas";
 
 /* eslint-disable @typescript-eslint/ban-types */
 /* TODO: Function and object types need to be updated to enable the lint rule */
@@ -47,7 +48,20 @@ const FILE_TYPE_OPTIONS = [
   { label: "SVG", value: "'image/svg+xml'", id: "image/svg+xml" },
 ];
 
-const FUNC_ARGS_REGEX = /((["][^"]*["])|(['][^']*['])|([\(].*[\)[=][>][{].*[}])|([^'",][^,"+]*[^'",]*))*/gi;
+const NAVIGATION_TARGET_FIELD_OPTIONS = [
+  {
+    label: "Same window",
+    value: `'${NavigationTargetType.SAME_WINDOW}'`,
+    id: NavigationTargetType.SAME_WINDOW,
+  },
+  {
+    label: "New window",
+    value: `'${NavigationTargetType.NEW_WINDOW}'`,
+    id: NavigationTargetType.NEW_WINDOW,
+  },
+];
+
+const FUNC_ARGS_REGEX = /((["][^"]*["])|([\[].*[\]])|([\{].*[\}])|(['][^']*['])|([\(].*[\)[=][>][{].*[}])|([^'",][^,"+]*[^'",]*))*/gi;
 const ACTION_TRIGGER_REGEX = /^{{([\s\S]*?)\(([\s\S]*?)\)}}$/g;
 //Old Regex:: /\(\) => ([\s\S]*?)(\([\s\S]*?\))/g;
 const ACTION_ANONYMOUS_FUNC_REGEX = /\(\) => (({[\s\S]*?})|([\s\S]*?)(\([\s\S]*?\)))/g;
@@ -100,7 +114,7 @@ const stringToJS = (string: string): string => {
 const JSToString = (js: string): string => {
   const segments = js.split(" + ");
   return segments
-    .map(segment => {
+    .map((segment) => {
       if (segment.charAt(0) === "'") {
         return segment.substring(1, segment.length - 1);
       } else return "{{" + segment + "}}";
@@ -112,7 +126,7 @@ const argsStringToArray = (funcArgs: string): string[] => {
   const argsplitMatches = [...funcArgs.matchAll(FUNC_ARGS_REGEX)];
   const arr: string[] = [];
   let isPrevUndefined = true;
-  argsplitMatches.forEach(match => {
+  argsplitMatches.forEach((match) => {
     const matchVal = match[0];
     if (!matchVal || matchVal === "") {
       if (isPrevUndefined) {
@@ -206,6 +220,7 @@ const ActionType = {
   showAlert: "showAlert",
   storeValue: "storeValue",
   download: "download",
+  copyToClipboard: "copyToClipboard",
 };
 type ActionType = typeof ActionType[keyof typeof ActionType];
 
@@ -265,7 +280,7 @@ const views = {
       <ControlWrapper key={props.label} isAction={true}>
         <KeyValueComponent
           pairs={props.get(props.value, false) as DropdownOption[]}
-          addLabel={"QueryParam"}
+          addLabel={"Query Params"}
           updatePairs={(pageParams: DropdownOption[]) => props.set(pageParams)}
         />
       </ControlWrapper>
@@ -310,9 +325,12 @@ const FieldType = {
   ALERT_TYPE_SELECTOR_FIELD: "ALERT_TYPE_SELECTOR_FIELD",
   KEY_TEXT_FIELD: "KEY_TEXT_FIELD",
   VALUE_TEXT_FIELD: "VALUE_TEXT_FIELD",
+  QUERY_PARAMS_FIELD: "QUERY_PARAMS_FIELD",
   DOWNLOAD_DATA_FIELD: "DOWNLOAD_DATA_FIELD",
   DOWNLOAD_FILE_NAME_FIELD: "DOWNLOAD_FILE_NAME_FIELD",
   DOWNLOAD_FILE_TYPE_FIELD: "DOWNLOAD_FILE_TYPE_FIELD",
+  COPY_TEXT_FIELD: "COPY_TEXT_FIELD",
+  NAVIGATION_TARGET_FIELD: "NAVIGATION_TARGET_FIELD",
 };
 type FieldType = typeof FieldType[keyof typeof FieldType];
 
@@ -343,11 +361,7 @@ const fieldConfigs: FieldConfigs = {
       }
       return mainFuncSelectedValue;
     },
-    setter: (
-      option: TreeDropdownOption,
-      currentValue: string,
-      defaultValue?: string,
-    ) => {
+    setter: (option: TreeDropdownOption) => {
       const type: ActionType = option.type || option.value;
       let value = option.value;
       switch (type) {
@@ -407,6 +421,15 @@ const fieldConfigs: FieldConfigs = {
     },
     view: ViewTypes.TEXT_VIEW,
   },
+  [FieldType.NAVIGATION_TARGET_FIELD]: {
+    getter: (value: any) => {
+      return enumTypeGetter(value, 2, NavigationTargetType.SAME_WINDOW);
+    },
+    setter: (option: any, currentValue: string) => {
+      return enumTypeSetter(option.value, currentValue, 2);
+    },
+    view: ViewTypes.SELECTOR_VIEW,
+  },
   [FieldType.ALERT_TEXT_FIELD]: {
     getter: (value: string) => {
       return textGetter(value, 0);
@@ -443,6 +466,15 @@ const fieldConfigs: FieldConfigs = {
     },
     view: ViewTypes.TEXT_VIEW,
   },
+  [FieldType.QUERY_PARAMS_FIELD]: {
+    getter: (value: any) => {
+      return textGetter(value, 1);
+    },
+    setter: (value: any, currentValue: string) => {
+      return textSetter(value, currentValue, 1);
+    },
+    view: ViewTypes.TEXT_VIEW,
+  },
   [FieldType.DOWNLOAD_DATA_FIELD]: {
     getter: (value: any) => {
       return textGetter(value, 0);
@@ -468,6 +500,15 @@ const fieldConfigs: FieldConfigs = {
     setter: (option: any, currentValue: string) =>
       enumTypeSetter(option.value, currentValue, 2),
     view: ViewTypes.SELECTOR_VIEW,
+  },
+  [FieldType.COPY_TEXT_FIELD]: {
+    getter: (value: any) => {
+      return textGetter(value, 0);
+    },
+    setter: (option: any, currentValue: string) => {
+      return textSetter(option, currentValue, 0);
+    },
+    view: ViewTypes.TEXT_VIEW,
   },
 };
 
@@ -509,16 +550,20 @@ const baseOptions: any = [
     label: "Download",
     value: ActionType.download,
   },
+  {
+    label: "Copy to Clipboard",
+    value: ActionType.copyToClipboard,
+  },
 ];
 function getOptionsWithChildren(
   options: TreeDropdownOption[],
   actions: ActionDataState,
   createActionOption: TreeDropdownOption,
 ) {
-  const option = options.find(option => option.value === ActionType.api);
+  const option = options.find((option) => option.value === ActionType.api);
   if (option) {
     option.children = [createActionOption];
-    actions.forEach(action => {
+    actions.forEach((action) => {
       (option.children as TreeDropdownOption[]).push({
         label: action.config.name,
         id: action.config.id,
@@ -604,6 +649,12 @@ function getFieldFromValue(
     fields.push({
       field: FieldType.URL_FIELD,
     });
+    fields.push({
+      field: FieldType.QUERY_PARAMS_FIELD,
+    });
+    fields.push({
+      field: FieldType.NAVIGATION_TARGET_FIELD,
+    });
   }
 
   if (value.indexOf("showModal") !== -1) {
@@ -649,11 +700,16 @@ function getFieldFromValue(
       },
     );
   }
+  if (value.indexOf("copyToClipboard") !== -1) {
+    fields.push({
+      field: FieldType.COPY_TEXT_FIELD,
+    });
+  }
   return fields;
 }
 
 function getPageDropdownOptions(state: AppState) {
-  return state.entities.pageList.pages.map(page => ({
+  return state.entities.pageList.pages.map((page) => ({
     label: page.pageName,
     id: page.pageId,
     value: `'${page.pageName}'`,
@@ -689,6 +745,7 @@ function renderField(props: {
     case FieldType.PAGE_SELECTOR_FIELD:
     case FieldType.ALERT_TYPE_SELECTOR_FIELD:
     case FieldType.DOWNLOAD_FILE_TYPE_FIELD:
+    case FieldType.NAVIGATION_TARGET_FIELD:
       let label = "";
       let defaultText = "Select Action";
       let options = props.apiOptionTree;
@@ -747,6 +804,11 @@ function renderField(props: {
         options = FILE_TYPE_OPTIONS;
         defaultText = "Select file type (optional)";
       }
+      if (fieldType === FieldType.NAVIGATION_TARGET_FIELD) {
+        label = "Target";
+        options = NAVIGATION_TARGET_FIELD_OPTIONS;
+        defaultText = "Navigation target";
+      }
       viewElement = (view as (props: SelectorViewProps) => JSX.Element)({
         options: options,
         label: label,
@@ -783,8 +845,10 @@ function renderField(props: {
     case FieldType.URL_FIELD:
     case FieldType.KEY_TEXT_FIELD:
     case FieldType.VALUE_TEXT_FIELD:
+    case FieldType.QUERY_PARAMS_FIELD:
     case FieldType.DOWNLOAD_DATA_FIELD:
     case FieldType.DOWNLOAD_FILE_NAME_FIELD:
+    case FieldType.COPY_TEXT_FIELD:
       let fieldLabel = "";
       if (fieldType === FieldType.ALERT_TEXT_FIELD) {
         fieldLabel = "Message";
@@ -794,10 +858,14 @@ function renderField(props: {
         fieldLabel = "Key";
       } else if (fieldType === FieldType.VALUE_TEXT_FIELD) {
         fieldLabel = "Value";
+      } else if (fieldType === FieldType.QUERY_PARAMS_FIELD) {
+        fieldLabel = "Query Params";
       } else if (fieldType === FieldType.DOWNLOAD_DATA_FIELD) {
         fieldLabel = "Data to download";
       } else if (fieldType === FieldType.DOWNLOAD_FILE_NAME_FIELD) {
         fieldLabel = "File name with extension";
+      } else if (fieldType === FieldType.COPY_TEXT_FIELD) {
+        fieldLabel = "Text to be copied to clipboard";
       }
       viewElement = (view as (props: TextViewProps) => JSX.Element)({
         label: fieldLabel,
@@ -959,7 +1027,7 @@ function useApiOptionTree() {
   const pageId = useSelector(getCurrentPageId) || "";
 
   const actions = useSelector(getActionsForCurrentPage).filter(
-    action => action.config.pluginType === "API",
+    (action) => action.config.pluginType === "API",
   );
   const apiOptionTree = getOptionsWithChildren(baseOptions, actions, {
     label: "Create API",
@@ -985,10 +1053,10 @@ function getQueryOptionsWithChildren(
   queries: ActionDataState,
   createQueryOption: TreeDropdownOption,
 ) {
-  const option = options.find(option => option.value === ActionType.query);
+  const option = options.find((option) => option.value === ActionType.query);
   if (option) {
     option.children = [createQueryOption];
-    queries.forEach(query => {
+    queries.forEach((query) => {
       (option.children as TreeDropdownOption[]).push({
         label: query.config.name,
         id: query.config.id,
@@ -1005,7 +1073,7 @@ function useQueryOptionTree() {
   const pageId = useSelector(getCurrentPageId) || "";
 
   const queries = useSelector(getActionsForCurrentPage).filter(
-    action => action.config.pluginType === "DB",
+    (action) => action.config.pluginType === "DB",
   );
   const queryOptionTree = getQueryOptionsWithChildren(baseOptions, queries, {
     label: "Create Query",

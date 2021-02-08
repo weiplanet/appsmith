@@ -103,6 +103,22 @@ const PropertyPaneConfigResponse: PropertyPaneConfigsResponse["data"] = {
             controlType: "SWITCH",
             isJSConvertible: true,
           },
+          {
+            id: "6.1.6",
+            propertyName: "minDate",
+            label: "Min Date",
+            helpText: "Defines the min date for this widget",
+            controlType: "DATE_PICKER",
+            isJSConvertible: true,
+          },
+          {
+            id: "6.1.7",
+            propertyName: "maxDate",
+            label: "Max Date",
+            helpText: "Defines the max date for this widget",
+            controlType: "DATE_PICKER",
+            isJSConvertible: true,
+          },
         ],
       },
       {
@@ -204,6 +220,14 @@ const PropertyPaneConfigResponse: PropertyPaneConfigsResponse["data"] = {
             placeholderText: "Enter default search text",
           },
           {
+            id: "7.1.7",
+            helpText: "Selects the default selected row",
+            propertyName: "defaultSelectedRow",
+            label: "Default Selected Row",
+            controlType: "INPUT_TEXT",
+            placeholderText: "Enter row index",
+          },
+          {
             id: "7.1.3",
             helpText:
               "Bind the Table.pageNo property in your API and call it onPageChange",
@@ -257,6 +281,14 @@ const PropertyPaneConfigResponse: PropertyPaneConfigsResponse["data"] = {
           },
           {
             id: "7.2.4",
+            helpText: "Triggers an action when a table page size is changed",
+            propertyName: "onPageSizeChange",
+            label: "onPageSizeChange",
+            controlType: "ACTION_SELECTOR",
+            isJSConvertible: true,
+          },
+          {
+            id: "7.2.5",
             propertyName: "onSearchTextChanged",
             label: "onSearchTextChanged",
             controlType: "ACTION_SELECTOR",
@@ -679,6 +711,14 @@ const PropertyPaneConfigResponse: PropertyPaneConfigsResponse["data"] = {
             controlType: "SWITCH",
             isJSConvertible: true,
           },
+          {
+            id: "4.2.0",
+            helpText: "Clears the input value after submit",
+            propertyName: "resetOnSubmit",
+            label: "Reset on submit",
+            controlType: "SWITCH",
+            isJSConvertible: true,
+          },
         ],
       },
       {
@@ -690,6 +730,15 @@ const PropertyPaneConfigResponse: PropertyPaneConfigsResponse["data"] = {
             helpText: "Triggers an action when the text is changed",
             propertyName: "onTextChanged",
             label: "onTextChanged",
+            controlType: "ACTION_SELECTOR",
+            isJSConvertible: true,
+          },
+          {
+            id: "5.11.3",
+            helpText:
+              "Triggers an action on submit (when the enter key is pressed)",
+            propertyName: "onSubmit",
+            label: "onSubmit",
             controlType: "ACTION_SELECTOR",
             isJSConvertible: true,
           },

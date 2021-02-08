@@ -1,6 +1,6 @@
 import { createReducer } from "utils/AppsmithUtils";
 import { ReduxActionTypes, ReduxAction } from "constants/ReduxActionConstants";
-import { Datasource } from "api/DatasourcesApi";
+import { Datasource } from "entities/Datasource";
 import _ from "lodash";
 
 const initialState: DatasourcePaneReduxState = {
@@ -81,6 +81,14 @@ const datasourcePaneReducer = createReducer(initialState, {
     return {
       ...state,
       newDatasource: action.payload.id,
+    };
+  },
+  [ReduxActionTypes.SAVE_DATASOURCE_NAME_SUCCESS]: (
+    state: DatasourcePaneReduxState,
+  ) => {
+    return {
+      ...state,
+      newDatasource: "",
     };
   },
   [ReduxActionTypes.UPDATE_DATASOURCE_SUCCESS]: (

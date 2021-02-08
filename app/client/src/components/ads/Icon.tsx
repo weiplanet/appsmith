@@ -8,6 +8,7 @@ import { ReactComponent as ErrorIcon } from "assets/icons/ads/error.svg";
 import { ReactComponent as SuccessIcon } from "assets/icons/ads/success.svg";
 import { ReactComponent as SearchIcon } from "assets/icons/ads/search.svg";
 import { ReactComponent as CloseIcon } from "assets/icons/ads/close.svg";
+import { ReactComponent as WarningIcon } from "assets/icons/ads/warning.svg";
 import { ReactComponent as DownArrow } from "assets/icons/ads/down_arrow.svg";
 import { ReactComponent as ShareIcon } from "assets/icons/ads/share.svg";
 import { ReactComponent as RocketIcon } from "assets/icons/ads/launch.svg";
@@ -15,10 +16,15 @@ import { ReactComponent as WorkspaceIcon } from "assets/icons/ads/workspace.svg"
 import { ReactComponent as CreateNewIcon } from "assets/icons/ads/create-new.svg";
 import { ReactComponent as InviteUserIcon } from "assets/icons/ads/invite-users.svg";
 import { ReactComponent as ViewAllIcon } from "assets/icons/ads/view-all.svg";
+import { ReactComponent as ViewLessIcon } from "assets/icons/ads/view-less.svg";
 import { ReactComponent as ContextMenuIcon } from "assets/icons/ads/context-menu.svg";
 import { ReactComponent as DuplicateIcon } from "assets/icons/ads/duplicate.svg";
 import { ReactComponent as LogoutIcon } from "assets/icons/ads/logout.svg";
 import { ReactComponent as ManageIcon } from "assets/icons/ads/manage.svg";
+import { ReactComponent as ArrowLeft } from "assets/icons/ads/arrow-left.svg";
+import { ReactComponent as Fork } from "assets/icons/ads/fork.svg";
+import { ReactComponent as ChevronLeft } from "assets/icons/ads/chevron_left.svg";
+import { ReactComponent as ChevronRight } from "assets/icons/ads/chevron_right.svg";
 import styled from "styled-components";
 import { CommonComponentProps, Classes } from "./common";
 import { noop } from "lodash";
@@ -86,41 +92,47 @@ export const IconCollection = [
   "plus",
   "invite-user",
   "view-all",
+  "view-less",
+  "warning",
   "downArrow",
   "context-menu",
   "duplicate",
   "logout",
   "manage",
+  "arrow-left",
+  "fork",
+  "chevron-left",
+  "chevron-right",
 ] as const;
 
 export type IconName = typeof IconCollection[number];
 
-const IconWrapper = styled.span<IconProps>`
+export const IconWrapper = styled.span<IconProps>`
   &:focus {
     outline: none;
   }
   display: flex;
   align-items: center;
   svg {
-    width: ${props => sizeHandler(props.size)}px;
-    height: ${props => sizeHandler(props.size)}px;
+    width: ${(props) => sizeHandler(props.size)}px;
+    height: ${(props) => sizeHandler(props.size)}px;
     path {
-      fill: ${props => props.theme.colors.icon.normal};
+      fill: ${(props) => props.fillColor || props.theme.colors.icon.normal};
     }
   }
-  ${props => (props.invisible ? `visibility: hidden;` : null)};
+  ${(props) => (props.invisible ? `visibility: hidden;` : null)};
 
   &:hover {
     cursor: pointer;
     path {
-      fill: ${props => props.theme.colors.icon.hover};
+      fill: ${(props) => props.theme.colors.icon.hover};
     }
   }
 
   &:active {
     cursor: pointer;
     path {
-      fill: ${props => props.theme.colors.icon.active};
+      fill: ${(props) => props.theme.colors.icon.active};
     }
   }
 `;
@@ -131,6 +143,7 @@ export type IconProps = {
   invisible?: boolean;
   className?: string;
   onClick?: () => void;
+  fillColor?: string;
 };
 
 const Icon = forwardRef(
@@ -185,6 +198,9 @@ const Icon = forwardRef(
       case "view-all":
         returnIcon = <ViewAllIcon />;
         break;
+      case "view-less":
+        returnIcon = <ViewLessIcon />;
+        break;
       case "context-menu":
         returnIcon = <ContextMenuIcon />;
         break;
@@ -196,6 +212,21 @@ const Icon = forwardRef(
         break;
       case "manage":
         returnIcon = <ManageIcon />;
+        break;
+      case "warning":
+        returnIcon = <WarningIcon />;
+        break;
+      case "arrow-left":
+        returnIcon = <ArrowLeft />;
+        break;
+      case "fork":
+        returnIcon = <Fork />;
+        break;
+      case "chevron-left":
+        returnIcon = <ChevronLeft />;
+        break;
+      case "chevron-right":
+        returnIcon = <ChevronRight />;
         break;
       default:
         returnIcon = null;

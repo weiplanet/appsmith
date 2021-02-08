@@ -1,7 +1,7 @@
 package com.appsmith.server.solutions;
 
 import com.appsmith.external.models.ActionConfiguration;
-import com.appsmith.external.models.AuthenticationDTO;
+import com.appsmith.external.models.DBAuth;
 import com.appsmith.external.models.DatasourceConfiguration;
 import com.appsmith.external.models.Property;
 import com.appsmith.server.constants.FieldName;
@@ -30,6 +30,7 @@ import com.appsmith.server.services.NewPageService;
 import com.appsmith.server.services.OrganizationService;
 import com.appsmith.server.services.SessionUserService;
 import lombok.extern.slf4j.Slf4j;
+import net.minidev.json.JSONArray;
 import net.minidev.json.JSONObject;
 import org.bson.types.ObjectId;
 import org.junit.Before;
@@ -360,8 +361,9 @@ public class ExamplesOrganizationClonerTests {
                     ds2.setName("datasource 2");
                     ds2.setOrganizationId(organization.getId());
                     ds2.setDatasourceConfiguration(new DatasourceConfiguration());
-                    ds2.getDatasourceConfiguration().setAuthentication(new AuthenticationDTO());
-                    ds2.getDatasourceConfiguration().getAuthentication().setPassword("answer-to-life");
+                    DBAuth auth = new DBAuth();
+                    auth.setPassword("answer-to-life");
+                    ds2.getDatasourceConfiguration().setAuthentication(auth);
 
                     return Mono.when(
                             datasourceService.create(ds1),
@@ -397,7 +399,7 @@ public class ExamplesOrganizationClonerTests {
                             .findFirst()
                             .orElseThrow();
                     assertThat(ds2.getDatasourceConfiguration().getAuthentication()).isNotNull();
-                    assertThat(ds2.getDatasourceConfiguration().getAuthentication().getPassword())
+                    assertThat(((DBAuth) ds2.getDatasourceConfiguration().getAuthentication()).getPassword())
                             .isEqualTo(encryptionService.encryptString("answer-to-life"));
 
                     assertThat(data.applications).isEmpty();
@@ -529,8 +531,16 @@ public class ExamplesOrganizationClonerTests {
                                 newPage.setLayouts(new ArrayList<>());
                                 final Layout layout = new Layout();
                                 layout.setId(new ObjectId().toString());
-                                layout.setDsl(new JSONObject(Map.of("text", "draft {{ newPageAction.data }}")));
-                                layout.setPublishedDsl(new JSONObject(Map.of("text", "published {{ newPageAction.data }}")));
+                                JSONObject dsl = new JSONObject();
+                                dsl.put("widgetName", "testWidget");
+                                JSONArray temp = new JSONArray();
+                                temp.addAll(List.of(new JSONObject(Map.of("key", "testField"))));
+                                dsl.put("dynamicBindingPathList", temp);
+                                dsl.put("testField", "draft {{ newPageAction.data }}");
+                                layout.setDsl(dsl);
+                                JSONObject publishedDsl = new JSONObject(dsl);
+                                publishedDsl.put("testField", "published {{ newPageAction.data }}");
+                                layout.setPublishedDsl(publishedDsl);
                                 final DslActionDTO actionDTO = new DslActionDTO();
                                 final HashSet<DslActionDTO> dslActionDTOS = new HashSet<>(List.of(actionDTO));
                                 layout.setLayoutOnLoadActions(List.of(dslActionDTOS));

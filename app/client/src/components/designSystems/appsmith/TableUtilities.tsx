@@ -6,6 +6,7 @@ import {
   ActionWrapper,
   SortIconWrapper,
   MenuCategoryWrapper,
+  MenuStyledOptionHeader,
 } from "./TableStyledWrappers";
 import { ColumnAction } from "components/propertyControls/ColumnActionSelectorControl";
 import { ColumnMenuOptionProps } from "components/designSystems/appsmith/ReactTableComponent";
@@ -14,7 +15,7 @@ import {
   ColumnTypes,
   Condition,
 } from "widgets/TableWidget";
-import { isString } from "lodash";
+import { isString, isPlainObject, isNil } from "lodash";
 import PopoverVideo from "components/designSystems/appsmith/PopoverVideo";
 import Button from "components/editorComponents/Button";
 import AutoToolTipComponent from "components/designSystems/appsmith/AutoToolTipComponent";
@@ -263,7 +264,7 @@ export const getMenuOptions = (props: MenuOptionProps) => {
         {
           content: (
             <MenuCategoryWrapper>
-              <div>Date Input Format</div>
+              <MenuStyledOptionHeader>Date Input Format</MenuStyledOptionHeader>
               {props.inputFormat && <Tag>Clear</Tag>}
             </MenuCategoryWrapper>
           ),
@@ -273,6 +274,7 @@ export const getMenuOptions = (props: MenuOptionProps) => {
             props.updateColumnType(columnIndex, ColumnTypes.TEXT);
           },
           id: "date_input",
+          isHeader: true,
         },
         {
           content: "UNIX timestamp (s)",
@@ -337,7 +339,9 @@ export const getMenuOptions = (props: MenuOptionProps) => {
         {
           content: (
             <MenuCategoryWrapper>
-              <div>Date Output Format</div>
+              <MenuStyledOptionHeader>
+                Date Output Format
+              </MenuStyledOptionHeader>
             </MenuCategoryWrapper>
           ),
           closeOnClick: false,
@@ -349,6 +353,7 @@ export const getMenuOptions = (props: MenuOptionProps) => {
               props.inputFormat || "",
             );
           },
+          isHeader: true,
         },
         {
           content: "Same as Input",
@@ -458,12 +463,14 @@ export const renderCell = (
   value: any,
   columnType: string,
   isHidden: boolean,
+  tableWidth: number,
 ) => {
+  if (!value) {
+    return <CellWrapper isHidden={isHidden}></CellWrapper>;
+  }
   switch (columnType) {
     case ColumnTypes.IMAGE:
-      if (!value) {
-        return <CellWrapper isHidden={isHidden}></CellWrapper>;
-      } else if (!isString(value)) {
+      if (!isString(value)) {
         return (
           <CellWrapper isHidden={isHidden}>
             <div>Invalid Image </div>
@@ -480,7 +487,7 @@ export const renderCell = (
               if (imageRegex.test(item)) {
                 return (
                   <a
-                    onClick={e => e.stopPropagation()}
+                    onClick={(e) => e.stopPropagation()}
                     target="_blank"
                     rel="noopener noreferrer"
                     href={item}
@@ -500,9 +507,7 @@ export const renderCell = (
       );
     case ColumnTypes.VIDEO:
       const youtubeRegex = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=|\?v=)([^#&?]*).*/;
-      if (!value) {
-        return <CellWrapper isHidden={isHidden}></CellWrapper>;
-      } else if (isString(value) && youtubeRegex.test(value)) {
+      if (isString(value) && youtubeRegex.test(value)) {
         return (
           <CellWrapper isHidden={isHidden} className="video-cell">
             <PopoverVideo url={value} />
@@ -515,7 +520,11 @@ export const renderCell = (
       }
     default:
       return (
-        <AutoToolTipComponent title={value.toString()} isHidden={isHidden}>
+        <AutoToolTipComponent
+          title={value.toString()}
+          isHidden={isHidden}
+          tableWidth={tableWidth}
+        >
           {value.toString()}
         </AutoToolTipComponent>
       );
@@ -557,7 +566,7 @@ const TableAction = (props: {
   };
   return (
     <ActionWrapper
-      onClick={e => {
+      onClick={(e) => {
         if (props.isSelected) {
           e.stopPropagation();
         }
@@ -603,8 +612,8 @@ const RenameColumn = (props: {
       placeholder="Enter Column Name"
       defaultValue={columnName}
       onChange={onColumnNameChange}
-      onKeyPress={e => onKeyPress(e.key)}
-      onBlur={e => handleColumnNameUpdate()}
+      onKeyPress={(e) => onKeyPress(e.key)}
+      onBlur={handleColumnNameUpdate}
     />
   );
 };
@@ -674,7 +683,7 @@ const SortIcon = styled(ControlIcons.SORT_CONTROL as AnyStyledComponent)`
   cursor: pointer;
   svg {
     path {
-      fill: ${props => props.theme.colors.secondary};
+      fill: ${(props) => props.theme.colors.secondary};
     }
   }
 `;
@@ -698,6 +707,7 @@ export const TableHeaderCell = (props: {
     toggleRenameColumn(false);
   };
   const handleSortColumn = () => {
+    if (column.isResizing) return;
     let columnIndex = props.columnIndex;
     if (props.isAscOrder === true) {
       columnIndex = -1;
@@ -760,6 +770,10 @@ export const TableHeaderCell = (props: {
       <div
         {...column.getResizerProps()}
         className={`resizer ${column.isResizing ? "isResizing" : ""}`}
+        onClick={(e: React.MouseEvent<HTMLElement>) => {
+          e.preventDefault();
+          e.stopPropagation();
+        }}
       />
     </div>
   );
@@ -829,10 +843,10 @@ export function sortTableFunction(
   return tableData.sort(
     (a: { [key: string]: any }, b: { [key: string]: any }) => {
       if (
-        a[sortedColumn] !== undefined &&
-        a[sortedColumn] !== null &&
-        b[sortedColumn] !== undefined &&
-        b[sortedColumn] !== null
+        isPlainObject(a) &&
+        isPlainObject(b) &&
+        !isNil(a[sortedColumn]) &&
+        !isNil(b[sortedColumn])
       ) {
         switch (columnType) {
           case ColumnTypes.CURRENCY:
@@ -874,7 +888,7 @@ export const ConditionFunctions: {
   [key: string]: (a: any, b: any) => boolean;
 } = {
   isExactly: (a: any, b: any) => {
-    return a === b;
+    return a.toString() === b.toString();
   },
   empty: (a: any) => {
     return a === "" || a === undefined || a === null;

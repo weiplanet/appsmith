@@ -1,9 +1,12 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { EditableText as BlueprintEditableText } from "@blueprintjs/core";
+import {
+  EditableText as BlueprintEditableText,
+  Classes as BlueprintClasses,
+} from "@blueprintjs/core";
 import styled from "styled-components";
 import Text, { TextType } from "./Text";
 import Spinner from "./Spinner";
-import { Classes, CommonComponentProps } from "./common";
+import { CommonComponentProps } from "./common";
 import { noop } from "lodash";
 import Icon, { IconSize } from "./Icon";
 import { getThemeDetails } from "selectors/themeSelectors";
@@ -41,10 +44,10 @@ export type EditableTextProps = CommonComponentProps & {
 const EditableTextWrapper = styled.div<{
   fill?: boolean;
 }>`
-  width: ${props => (!props.fill ? "234px" : "100%")};
+  width: ${(props) => (!props.fill ? "234px" : "100%")};
   .error-message {
-    margin-left: ${props => props.theme.spaces[5]}px;
-    color: ${props => props.theme.colors.danger.main};
+    margin-left: ${(props) => props.theme.spaces[5]}px;
+    color: ${(props) => props.theme.colors.danger.main};
   }
 `;
 
@@ -75,49 +78,51 @@ const TextContainer = styled.div<{
     display: none;
   }
 
-  &&& .bp3-editable-text-content,
-  &&& .bp3-editable-text-input {
-    font-size: ${props => props.theme.typography.p1.fontSize}px;
-    line-height: ${props => props.theme.typography.p1.lineHeight}px;
-    letter-spacing: ${props => props.theme.typography.p1.letterSpacing}px;
-    font-weight: ${props => props.theme.typography.p1.fontWeight}px;
+  &&&
+    .${BlueprintClasses.EDITABLE_TEXT_CONTENT},
+    &&&
+    .${BlueprintClasses.EDITABLE_TEXT_INPUT} {
+    font-size: ${(props) => props.theme.typography.p1.fontSize}px;
+    line-height: ${(props) => props.theme.typography.p1.lineHeight}px;
+    letter-spacing: ${(props) => props.theme.typography.p1.letterSpacing}px;
+    font-weight: ${(props) => props.theme.typography.p1.fontWeight}px;
   }
 
-  &&& .bp3-editable-text-content {
+  &&& .${BlueprintClasses.EDITABLE_TEXT_CONTENT} {
     cursor: pointer;
-    color: ${props => props.theme.colors.editableText.color};
+    color: ${(props) => props.theme.colors.editableText.color};
     overflow: hidden;
     text-overflow: ellipsis;
-    ${props => (props.isEditing ? "display: none" : "display: block")};
+    ${(props) => (props.isEditing ? "display: none" : "display: block")};
   }
 
-  &&& .bp3-editable-text-input {
+  &&& .${BlueprintClasses.EDITABLE_TEXT_INPUT} {
     border: none;
     outline: none;
-    height: ${props => props.theme.spaces[13] + 3}px;
-    color: ${props => props.theme.colors.editableText.color};
+    height: ${(props) => props.theme.spaces[13] + 3}px;
+    color: ${(props) => props.theme.colors.editableText.color};
     min-width: 100%;
-    border-radius: ${props => props.theme.spaces[0]}px;
+    border-radius: ${(props) => props.theme.spaces[0]}px;
   }
 
-  &&& .bp3-editable-text {
+  &&& .${BlueprintClasses.EDITABLE_TEXT} {
     overflow: hidden;
-    height: ${props => props.theme.spaces[13] + 3}px;
-    padding: ${props => props.theme.spaces[4]}px
-      ${props => props.theme.spaces[5]}px;
+    height: ${(props) => props.theme.spaces[13] + 3}px;
+    padding: ${(props) => props.theme.spaces[4]}px
+      ${(props) => props.theme.spaces[5]}px;
     width: calc(100% - 40px);
-    background-color: ${props => props.bgColor};
+    background-color: ${(props) => props.bgColor};
   }
 
   .icon-wrapper {
-    background-color: ${props => props.bgColor};
+    background-color: ${(props) => props.bgColor};
   }
 `;
 
 const IconWrapper = styled.div`
-  width: ${props => props.theme.spaces[13] + 4}px;
-  padding-right: ${props => props.theme.spaces[5]}px;
-  height: ${props => props.theme.spaces[13] + 3}px;
+  width: ${(props) => props.theme.spaces[13] + 4}px;
+  padding-right: ${(props) => props.theme.spaces[5]}px;
+  height: ${(props) => props.theme.spaces[13] + 3}px;
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -173,14 +178,18 @@ export const EditableText = (props: EditableTextProps) => {
 
   const onConfirm = useCallback(
     (_value: string) => {
-      if (savingState === SavingState.ERROR || isInvalid || _value === "") {
+      const finalVal: string = _value.trim();
+      if (savingState === SavingState.ERROR || isInvalid || finalVal === "") {
         setValue(lastValidValue);
         onBlur(lastValidValue);
         setSavingState(SavingState.NOT_STARTED);
-      } else if (changeStarted) {
-        onTextChanged && onTextChanged(_value);
       }
-      onBlur(_value);
+      if (changeStarted) {
+        onTextChanged && onTextChanged(finalVal);
+      }
+      if (finalVal && finalVal !== defaultValue) {
+        onBlur(finalVal);
+      }
       setIsEditing(false);
       setChangeStarted(false);
     },
@@ -196,10 +205,11 @@ export const EditableText = (props: EditableTextProps) => {
 
   const onInputchange = useCallback(
     (_value: string) => {
-      const finalVal: string = _value;
+      const finalVal: string =
+        _value.indexOf(" ") === 0 ? _value.trim() : _value;
       const errorMessage = inputValidation && inputValidation(finalVal);
       const error = errorMessage ? errorMessage : false;
-      if (!error && _value !== "") {
+      if (!error && finalVal !== "") {
         setLastValidValue(finalVal);
         onTextChanged && onTextChanged(finalVal);
       }
@@ -259,13 +269,15 @@ export const EditableText = (props: EditableTextProps) => {
           onCancel={onConfirm}
         />
 
-        <IconWrapper className="icon-wrapper">
-          {savingState === SavingState.STARTED ? (
+        {savingState === SavingState.STARTED ? (
+          <IconWrapper className="icon-wrapper">
             <Spinner size={IconSize.XL} />
-          ) : value ? (
+          </IconWrapper>
+        ) : value && !props.hideEditIcon ? (
+          <IconWrapper className="icon-wrapper">
             <Icon name={iconName} size={IconSize.XL} />
-          ) : null}
-        </IconWrapper>
+          </IconWrapper>
+        ) : null}
       </TextContainer>
       {isEditing && !!isInvalid ? (
         <Text className="error-message" type={TextType.P2}>

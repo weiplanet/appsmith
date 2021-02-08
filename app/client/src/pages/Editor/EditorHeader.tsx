@@ -9,13 +9,11 @@ import {
   getApplicationViewerPageURL,
 } from "constants/routes";
 import AppInviteUsersForm from "pages/organization/AppInviteUsersForm";
-import Button from "components/editorComponents/Button";
 import StyledHeader from "components/designSystems/appsmith/StyledHeader";
 import AnalyticsUtil from "utils/AnalyticsUtil";
 import HelpModal from "components/designSystems/appsmith/help/HelpModal";
 import { FormDialogComponent } from "components/editorComponents/form/FormDialogComponent";
-import { Colors } from "constants/Colors";
-import AppsmithLogo from "assets/images/appsmith_logo_white.png";
+import AppsmithLogo from "assets/images/appsmith_logo_square.png";
 import { Link } from "react-router-dom";
 import { AppState } from "reducers";
 import {
@@ -23,6 +21,7 @@ import {
   getCurrentPageId,
   getIsPageSaving,
   getIsPublishingApplication,
+  getPageSavingError,
 } from "selectors/editorSelectors";
 import { getCurrentOrgId } from "selectors/organizationSelectors";
 import { connect, useDispatch, useSelector } from "react-redux";
@@ -35,14 +34,49 @@ import {
   getApplicationList,
   getIsSavingAppName,
 } from "selectors/applicationSelectors";
-import EditableTextWrapper from "components/ads/EditableTextWrapper";
+import EditableAppName from "./EditableAppName";
+import Boxed from "components/editorComponents/Onboarding/Boxed";
+import OnboardingToolTip from "components/editorComponents/Onboarding/Tooltip";
+import { OnboardingStep } from "constants/OnboardingConstants";
+import { Position } from "@blueprintjs/core";
+import Indicator from "components/editorComponents/Onboarding/Indicator";
+import ProfileDropdown from "pages/common/ProfileDropdown";
+import { getCurrentUser } from "selectors/usersSelectors";
+import { ANONYMOUS_USERNAME } from "constants/userConstants";
+import Button, { Size } from "components/ads/Button";
+import { IconWrapper } from "components/ads/Icon";
+import { Profile } from "pages/common/ProfileImage";
+import { getTypographyByKey } from "constants/DefaultTheme";
 
 const HeaderWrapper = styled(StyledHeader)`
-  background: ${Colors.BALTIC_SEA};
-  height: 48px;
-  color: white;
+  padding-right: 0;
+  padding-left: ${(props) => props.theme.spaces[7]}px;
+  background-color: ${(props) => props.theme.colors.header.background};
+  height: ${(props) => props.theme.smallHeaderHeight};
   flex-direction: row;
   box-shadow: 0px 4px 4px rgba(0, 0, 0, 0.05);
+  & .editable-application-name {
+    ${(props) => getTypographyByKey(props, "h4")}
+    color: ${(props) => props.theme.colors.header.appName};
+  }
+
+  & .header__application-share-btn {
+    background-color: ${(props) => props.theme.colors.header.background};
+    border-color: ${(props) => props.theme.colors.header.background};
+    // margin-right: ${(props) => props.theme.spaces[1]}px;
+  }
+
+  & .header__application-share-btn:hover {
+    color: ${(props) => props.theme.colors.header.shareBtnHighlight};
+    ${IconWrapper} path {
+      fill: ${(props) => props.theme.colors.header.shareBtnHighlight};
+    }
+  }
+
+  & ${Profile} {
+    width: 24px;
+    height: 24px;
+  }
 `;
 
 const HeaderSection = styled.div`
@@ -53,39 +87,16 @@ const HeaderSection = styled.div`
     justify-content: flex-start;
   }
   :nth-child(2) {
-    justify-content: center;
-    flex-direction: column;
-  }
-  :nth-child(3) {
     justify-content: flex-end;
   }
 `;
 
 const AppsmithLogoImg = styled.img`
-  max-width: 110px;
-`;
-
-const ApplicationName = styled.span`
-  font-weight: 500;
-  font-size: 14px;
-  line-height: 14px;
-  color: #fff;
-  margin-bottom: 6px;
-`;
-
-const PageName = styled.span`
-  display: flex;
-  flex: 1;
-  font-size: 12px;
-  line-height: 12px;
-  letter-spacing: 0.04em;
-  color: #ffffff;
-  opacity: 0.5;
+  margin-right: ${(props) => props.theme.spaces[6]}px;
+  height: 24px;
 `;
 
 const SaveStatusContainer = styled.div`
-  margin: 0 10px;
-  border: 1px solid rgb(95, 105, 116);
   border-radius: 50%;
   width: 32px;
   height: 32px;
@@ -97,31 +108,14 @@ const DeploySection = styled.div`
   display: flex;
 `;
 
-const DeployButton = styled(Button)`
-  height: 32px;
-  margin: 5px 10px;
-  margin-right: 0;
-  border-top-right-radius: 0;
-  border-bottom-right-radius: 0;
+const ProfileDropdownContainer = styled.div`
+  margin: 0 ${(props) => props.theme.spaces[7]}px;
 `;
 
-const DeployLinkButton = styled(Button)`
-  height: 32px;
-  margin: 5px 10px;
-  margin-left: 0;
-  border-top-left-radius: 0;
-  border-bottom-left-radius: 0;
-  min-width: 20px !important;
-  width: 20px !important;
-  background-color: rgb(42, 195, 157) !important;
-  border: none !important;
-`;
-
-const ShareButton = styled(Button)`
-  height: 32px;
-  margin: 5px 10px;
-  color: white !important;
-  border-color: rgb(95, 105, 116) !important;
+const StyledDeployButton = styled(Button)`
+  height: ${(props) => props.theme.smallHeaderHeight};
+  ${(props) => getTypographyByKey(props, "btnLarge")}
+  padding: ${(props) => props.theme.spaces[2]}px;
 `;
 
 type EditorHeaderProps = {
@@ -143,16 +137,15 @@ export const EditorHeader = (props: EditorHeaderProps) => {
     isSaving,
     pageSaveError,
     pageId,
-    isPublishing,
     orgId,
     applicationId,
-    pageName,
     publishApplication,
   } = props;
 
   const dispatch = useDispatch();
   const isSavingName = useSelector(getIsSavingAppName);
   const applicationList = useSelector(getApplicationList);
+  const user = useSelector(getCurrentUser);
 
   const handlePublish = () => {
     if (applicationId) {
@@ -191,104 +184,104 @@ export const EditorHeader = (props: EditorHeaderProps) => {
     }
   }
 
-  const updateApplicationDispatch = (id: string, data: { name: string }) => {
+  const updateApplicationDispatch = (
+    id: string,
+    data: { name: string; currentApp: boolean },
+  ) => {
     dispatch(updateApplication(id, data));
   };
 
   return (
     <HeaderWrapper>
       <HeaderSection>
-        <Link to={APPLICATIONS_URL}>
+        <Link to={APPLICATIONS_URL} style={{ height: 24 }}>
           <AppsmithLogoImg
             src={AppsmithLogo}
             alt="Appsmith logo"
             className="t--appsmith-logo"
           />
         </Link>
-      </HeaderSection>
-      <HeaderSection flex-direction={"row"}>
-        {currentApplication ? (
-          <EditableTextWrapper
-            variant="UNDERLINE"
-            defaultValue={currentApplication?.name || ""}
-            editInteractionKind={EditInteractionKind.SINGLE}
-            hideEditIcon={true}
-            className="t--application-name"
-            fill={false}
-            savingState={
-              isSavingName ? SavingState.STARTED : SavingState.NOT_STARTED
-            }
-            isNewApp={
-              applicationList.filter(el => el.id === applicationId).length > 0
-            }
-            onBlur={(value: string) =>
-              updateApplicationDispatch(applicationId || "", { name: value })
-            }
-          />
-        ) : null}
-        {/* <PageName>{pageName}&nbsp;</PageName> */}
-      </HeaderSection>
-      <HeaderSection>
-        <SaveStatusContainer className={"t--save-status-container"}>
-          {saveStatusIcon}
-        </SaveStatusContainer>
-        <ShareButton
-          target="_blank"
-          href="https://mail.google.com/mail/u/0/?view=cm&fs=1&to=feedback@appsmith.com&tf=1"
-          text="Feedback"
-          intent="none"
-          outline
-          size="small"
-          className="t--application-feedback-btn"
-          icon={
-            <HeaderIcons.FEEDBACK color={Colors.WHITE} width={13} height={13} />
-          }
-        />
-        <FormDialogComponent
-          trigger={
-            <ShareButton
-              text="Share"
-              intent="none"
-              outline
-              size="small"
-              className="t--application-share-btn"
-              icon={
-                <HeaderIcons.SHARE
-                  color={Colors.WHITE}
-                  width={13}
-                  height={13}
-                />
+        <Boxed step={OnboardingStep.FINISH}>
+          {currentApplication && (
+            <EditableAppName
+              defaultValue={currentApplication.name || ""}
+              editInteractionKind={EditInteractionKind.SINGLE}
+              className="t--application-name editable-application-name"
+              fill={false}
+              savingState={
+                isSavingName ? SavingState.STARTED : SavingState.NOT_STARTED
+              }
+              isNewApp={
+                applicationList.filter((el) => el.id === applicationId).length >
+                0
+              }
+              onBlur={(value: string) =>
+                updateApplicationDispatch(applicationId || "", {
+                  name: value,
+                  currentApp: true,
+                })
               }
             />
-          }
-          canOutsideClickClose={true}
-          Form={AppInviteUsersForm}
-          orgId={orgId}
-          applicationId={applicationId}
-          title={
-            currentApplication ? currentApplication.name : "Share Application"
-          }
-        />
-        <DeploySection>
-          <DeployButton
-            onClick={handlePublish}
-            text="Deploy"
-            loading={isPublishing}
-            intent="primary"
-            filled
-            size="small"
-            className="t--application-publish-btn"
-            icon={
-              <HeaderIcons.DEPLOY color={Colors.WHITE} width={13} height={13} />
-            }
-          />
-          <DeployLinkButtonDialog
+          )}
+        </Boxed>
+      </HeaderSection>
+      <HeaderSection>
+        <Boxed step={OnboardingStep.FINISH}>
+          <SaveStatusContainer className={"t--save-status-container"}>
+            {saveStatusIcon}
+          </SaveStatusContainer>
+          <FormDialogComponent
             trigger={
-              <DeployLinkButton icon="caret-down" filled intent="primary" />
+              <Button
+                text={"Share"}
+                icon={"share"}
+                size={Size.small}
+                className="t--application-share-btn header__application-share-btn"
+              />
             }
-            link={getApplicationViewerPageURL(applicationId, pageId)}
+            canOutsideClickClose={true}
+            Form={AppInviteUsersForm}
+            orgId={orgId}
+            applicationId={applicationId}
+            title={
+              currentApplication ? currentApplication.name : "Share Application"
+            }
           />
-        </DeploySection>
+        </Boxed>
+        <Boxed step={OnboardingStep.SUCCESSFUL_BINDING}>
+          <DeploySection>
+            <OnboardingToolTip
+              step={[OnboardingStep.DEPLOY]}
+              position={Position.BOTTOM_RIGHT}
+              dismissOnOutsideClick={false}
+            >
+              <Indicator
+                step={OnboardingStep.SUCCESSFUL_BINDING}
+                offset={{ left: 10 }}
+                theme={"light"}
+              >
+                <StyledDeployButton
+                  fill
+                  onClick={handlePublish}
+                  text={"Deploy"}
+                  size={Size.small}
+                  className="t--application-publish-btn"
+                />
+              </Indicator>
+            </OnboardingToolTip>
+            <DeployLinkButtonDialog
+              trigger={
+                <StyledDeployButton icon={"downArrow"} size={Size.xxs} />
+              }
+              link={getApplicationViewerPageURL(applicationId, pageId)}
+            />
+          </DeploySection>
+        </Boxed>
+        {user && user.username !== ANONYMOUS_USERNAME && (
+          <ProfileDropdownContainer>
+            <ProfileDropdown userName={user?.username || ""} hideThemeSwitch />
+          </ProfileDropdownContainer>
+        )}
       </HeaderSection>
       <HelpModal page={"Editor"} />
     </HeaderWrapper>
@@ -298,6 +291,7 @@ export const EditorHeader = (props: EditorHeaderProps) => {
 const mapStateToProps = (state: AppState) => ({
   pageName: state.ui.editor.currentPageName,
   isSaving: getIsPageSaving(state),
+  pageSaveError: getPageSavingError(state),
   orgId: getCurrentOrgId(state),
   applicationId: getCurrentApplicationId(state),
   currentApplication: state.ui.applications.currentApplication,

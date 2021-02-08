@@ -14,19 +14,20 @@ import {
 } from "utils/WidgetFactory";
 import * as Sentry from "@sentry/react";
 import withMeta, { WithMeta } from "./MetaHOC";
+import moment from "moment";
 
 class DatePickerWidget extends BaseWidget<DatePickerWidgetProps, WidgetState> {
   static getPropertyValidationMap(): WidgetPropertyValidationType {
     return {
       ...BASE_WIDGET_VALIDATION,
-      defaultDate: VALIDATION_TYPES.DATE,
+      defaultDate: VALIDATION_TYPES.DEFAULT_DATE,
       timezone: VALIDATION_TYPES.TEXT,
       enableTimePicker: VALIDATION_TYPES.BOOLEAN,
       dateFormat: VALIDATION_TYPES.TEXT,
       label: VALIDATION_TYPES.TEXT,
       datePickerType: VALIDATION_TYPES.TEXT,
-      maxDate: VALIDATION_TYPES.DATE,
-      minDate: VALIDATION_TYPES.DATE,
+      maxDate: VALIDATION_TYPES.MAX_DATE,
+      minDate: VALIDATION_TYPES.MIN_DATE,
       isRequired: VALIDATION_TYPES.BOOLEAN,
       // onDateSelected: VALIDATION_TYPES.ACTION_SELECTOR,
       // onDateRangeSelected: VALIDATION_TYPES.ACTION_SELECTOR,
@@ -58,6 +59,33 @@ class DatePickerWidget extends BaseWidget<DatePickerWidgetProps, WidgetState> {
     };
   }
 
+  componentDidUpdate(prevProps: DatePickerWidgetProps) {
+    if (this.props.dateFormat !== prevProps.dateFormat) {
+      if (this.props.defaultDate) {
+        const defaultDate = moment(
+          this.props.defaultDate,
+          this.props.dateFormat,
+        );
+        if (!defaultDate.isValid()) {
+          super.updateWidgetProperty("defaultDate", "");
+        } else {
+          if (this.props.minDate) {
+            const minDate = moment(this.props.minDate, this.props.dateFormat);
+            if (!minDate.isValid() || defaultDate.isBefore(minDate)) {
+              super.updateWidgetProperty("defaultDate", "");
+            }
+          }
+          if (this.props.maxDate) {
+            const maxDate = moment(this.props.maxDate, this.props.dateFormat);
+            if (!maxDate.isValid() || defaultDate.isAfter(maxDate)) {
+              super.updateWidgetProperty("defaultDate", "");
+            }
+          }
+        }
+      }
+    }
+  }
+
   getPageView() {
     return (
       <DatePickerComponent
@@ -69,6 +97,8 @@ class DatePickerWidget extends BaseWidget<DatePickerWidgetProps, WidgetState> {
         onDateSelected={this.onDateSelected}
         selectedDate={this.props.selectedDate}
         isLoading={this.props.isLoading}
+        minDate={this.props.minDate}
+        maxDate={this.props.maxDate}
       />
     );
   }
@@ -98,8 +128,8 @@ export interface DatePickerWidgetProps extends WidgetProps, WithMeta {
   datePickerType: DatePickerType;
   onDateSelected?: string;
   onDateRangeSelected?: string;
-  maxDate: Date;
-  minDate: Date;
+  maxDate: string;
+  minDate: string;
   isRequired?: boolean;
 }
 

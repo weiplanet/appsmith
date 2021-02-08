@@ -2,14 +2,15 @@ package com.external.plugins;
 
 import com.appsmith.external.models.ActionConfiguration;
 import com.appsmith.external.models.ActionExecutionResult;
-import com.appsmith.external.models.AuthenticationDTO;
+import com.appsmith.external.models.DBAuth;
 import com.appsmith.external.models.DatasourceConfiguration;
 import com.appsmith.external.models.DatasourceStructure;
 import com.appsmith.external.models.Endpoint;
+import com.appsmith.external.exceptions.pluginExceptions.StaleConnectionException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
-import lombok.extern.slf4j.Slf4j;
+import com.zaxxer.hikari.HikariDataSource;
 import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
@@ -37,7 +38,6 @@ import static org.junit.Assert.assertTrue;
 /**
  * Unit tests for the PostgresPlugin
  */
-@Slf4j
 public class PostgresPluginTest {
 
     PostgresPlugin.PostgresPluginExecutor pluginExecutor = new PostgresPlugin.PostgresPluginExecutor();
@@ -104,6 +104,12 @@ public class PostgresPluginTest {
                         "    user_id int NOT NULL,\n" +
                         "    constraint user_fk foreign key (user_id) references users(id)" +
                         ")");
+
+                // Testing <https://github.com/appsmithorg/appsmith/issues/1758>.
+                statement.execute("CREATE TABLE campus (\n" +
+                        "    id timestamptz default now(),\n" +
+                        "    name timestamptz default now()\n" +
+                        ")");
             }
 
             try (Statement statement = connection.createStatement()) {
@@ -132,8 +138,8 @@ public class PostgresPluginTest {
     }
 
     private DatasourceConfiguration createDatasourceConfiguration() {
-        AuthenticationDTO authDTO = new AuthenticationDTO();
-        authDTO.setAuthType(AuthenticationDTO.Type.USERNAME_PASSWORD);
+        DBAuth authDTO = new DBAuth();
+        authDTO.setAuthType(DBAuth.Type.USERNAME_PASSWORD);
         authDTO.setUsername(username);
         authDTO.setPassword(password);
         authDTO.setDatabaseName("postgres");
@@ -153,7 +159,7 @@ public class PostgresPluginTest {
 
         DatasourceConfiguration dsConfig = createDatasourceConfiguration();
 
-        Mono<Connection> dsConnectionMono = pluginExecutor.datasourceCreate(dsConfig);
+        Mono<HikariDataSource> dsConnectionMono = pluginExecutor.datasourceCreate(dsConfig);
 
         StepVerifier.create(dsConnectionMono)
                 .assertNext(Assert::assertNotNull)
@@ -194,7 +200,7 @@ public class PostgresPluginTest {
     @Test
     public void testAliasColumnNames() {
         DatasourceConfiguration dsConfig = createDatasourceConfiguration();
-        Mono<Connection> dsConnectionMono = pluginExecutor.datasourceCreate(dsConfig);
+        Mono<HikariDataSource> dsConnectionMono = pluginExecutor.datasourceCreate(dsConfig);
 
         ActionConfiguration actionConfiguration = new ActionConfiguration();
         actionConfiguration.setBody("SELECT id as user_id FROM users WHERE id = 1");
@@ -221,7 +227,7 @@ public class PostgresPluginTest {
     @Test
     public void testExecute() {
         DatasourceConfiguration dsConfig = createDatasourceConfiguration();
-        Mono<Connection> dsConnectionMono = pluginExecutor.datasourceCreate(dsConfig);
+        Mono<HikariDataSource> dsConnectionMono = pluginExecutor.datasourceCreate(dsConfig);
 
         ActionConfiguration actionConfiguration = new ActionConfiguration();
         actionConfiguration.setBody("SELECT * FROM users WHERE id = 1");
@@ -277,9 +283,21 @@ public class PostgresPluginTest {
         StepVerifier.create(structureMono)
                 .assertNext(structure -> {
                     assertNotNull(structure);
-                    assertEquals(2, structure.getTables().size());
+                    assertEquals(3, structure.getTables().size());
 
-                    final DatasourceStructure.Table possessionsTable = structure.getTables().get(0);
+                    final DatasourceStructure.Table campusTable = structure.getTables().get(0);
+                    assertEquals("public.campus", campusTable.getName());
+                    assertEquals(DatasourceStructure.TableType.TABLE, campusTable.getType());
+                    assertArrayEquals(
+                            new DatasourceStructure.Column[]{
+                                    new DatasourceStructure.Column("id", "timestamptz", "now()"),
+                                    new DatasourceStructure.Column("name", "timestamptz", "now()")
+                            },
+                            campusTable.getColumns().toArray()
+                    );
+                    assertEquals(campusTable.getKeys().size(), 0);
+
+                    final DatasourceStructure.Table possessionsTable = structure.getTables().get(1);
                     assertEquals("public.possessions", possessionsTable.getName());
                     assertEquals(DatasourceStructure.TableType.TABLE, possessionsTable.getType());
                     assertArrayEquals(
@@ -318,7 +336,7 @@ public class PostgresPluginTest {
                             possessionsTable.getTemplates().toArray()
                     );
 
-                    final DatasourceStructure.Table usersTable = structure.getTables().get(1);
+                    final DatasourceStructure.Table usersTable = structure.getTables().get(2);
                     assertEquals("public.users", usersTable.getName());
                     assertEquals(DatasourceStructure.TableType.TABLE, usersTable.getType());
                     assertArrayEquals(
@@ -369,5 +387,24 @@ public class PostgresPluginTest {
                     );
                 })
                 .verifyComplete();
+    }
+
+    @Test
+    public void testStaleConnectionCheck() {
+        DatasourceConfiguration dsConfig = createDatasourceConfiguration();
+
+        ActionConfiguration actionConfiguration = new ActionConfiguration();
+        actionConfiguration.setBody("show databases");
+        Mono<HikariDataSource> connectionCreateMono = pluginExecutor.datasourceCreate(dsConfig);
+
+        Mono<ActionExecutionResult> resultMono = connectionCreateMono
+                .flatMap(pool -> {
+                    pool.close();
+                    return pluginExecutor.execute(pool, dsConfig, actionConfiguration);
+                });
+
+        StepVerifier.create(resultMono)
+                .expectErrorMatches(throwable -> throwable instanceof StaleConnectionException)
+                .verify();
     }
 }

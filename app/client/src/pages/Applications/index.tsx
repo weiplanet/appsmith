@@ -1,6 +1,7 @@
-import React, { Component, Fragment, useState } from "react";
+import React, { Component, Fragment, useEffect, useRef, useState } from "react";
 import styled from "styled-components";
 import { connect, useSelector, useDispatch } from "react-redux";
+import { useLocation } from "react-router-dom";
 import { AppState } from "reducers";
 import { Card, Dialog, Classes as BlueprintClasses } from "@blueprintjs/core";
 import {
@@ -13,6 +14,7 @@ import {
   getUserApplicationsOrgs,
   getIsDuplicatingApplication,
   getApplicationSearchKeyword,
+  getIsSavingOrgInfo,
 } from "selectors/applicationSelectors";
 import {
   ReduxActionTypes,
@@ -51,17 +53,26 @@ import PerformanceTracker, {
 } from "utils/PerformanceTracker";
 import { loadingUserOrgs } from "./ApplicationLoaders";
 import { creatingApplicationMap } from "reducers/uiReducers/applicationsReducer";
+import EditableText, {
+  EditInteractionKind,
+  SavingState,
+} from "components/ads/EditableText";
+import { notEmptyValidator } from "components/ads/TextInput";
+import { saveOrg } from "actions/orgActions";
 import CenteredWrapper from "../../components/designSystems/appsmith/CenteredWrapper";
 import NoSearchImage from "../../assets/images/NoSearchResult.svg";
-import { getNextEntityName } from "utils/AppsmithUtils";
+import { getNextEntityName, getRandomPaletteColor } from "utils/AppsmithUtils";
 import Spinner from "components/ads/Spinner";
 import ProfileImage from "pages/common/ProfileImage";
+import { getThemeDetails } from "selectors/themeSelectors";
+import { AppIconCollection } from "components/ads/AppIcon";
+import ProductUpdatesModal from "pages/Applications/ProductUpdatesModal";
 
 const OrgDropDown = styled.div`
   display: flex;
-  padding: ${props => props.theme.spaces[4]}px
-    ${props => props.theme.spaces[4]}px;
-  font-size: ${props => props.theme.fontSizes[1]}px;
+  padding: ${(props) => props.theme.spaces[4]}px
+    ${(props) => props.theme.spaces[4]}px;
+  font-size: ${(props) => props.theme.fontSizes[1]}px;
   justify-content: space-between;
   align-items: center;
 `;
@@ -71,89 +82,100 @@ const ApplicationCardsWrapper = styled.div`
   flex-flow: row wrap;
   justify-content: flex-start;
   align-items: space-evenly;
-  font-size: ${props => props.theme.fontSizes[4]}px;
+  font-size: ${(props) => props.theme.fontSizes[4]}px;
 `;
 
 const OrgSection = styled.div``;
 
 const PaddingWrapper = styled.div`
-  width: ${props => props.theme.card.minWidth + props.theme.spaces[5] * 2}px;
-  margin: ${props => props.theme.spaces[6] + 1}px 0px
-    ${props => props.theme.spaces[6] + 1}px 0px;
+  width: ${(props) => props.theme.card.minWidth + props.theme.spaces[5] * 2}px;
+  margin: ${(props) => props.theme.spaces[6] + 1}px 0px
+    ${(props) => props.theme.spaces[6] + 1}px 0px;
 
   @media screen and (min-width: 1500px) {
-    margin-right: ${props => props.theme.spaces[12] - 1}px;
+    margin-right: ${(props) => props.theme.spaces[12] - 1}px;
     .bp3-card {
-      width: ${props => props.theme.card.minWidth}px;
-      height: ${props => props.theme.card.minHeight}px;
+      width: ${(props) => props.theme.card.minWidth}px;
+      height: ${(props) => props.theme.card.minHeight}px;
     }
   }
 
   @media screen and (min-width: 1500px) and (max-width: 1512px) {
-    width: ${props => props.theme.card.minWidth + props.theme.spaces[4] * 2}px;
-    margin-right: ${props => props.theme.spaces[12] - 1}px;
+    width: ${(props) =>
+      props.theme.card.minWidth + props.theme.spaces[4] * 2}px;
+    margin-right: ${(props) => props.theme.spaces[12] - 1}px;
     .bp3-card {
-      width: ${props => props.theme.card.minWidth - 5}px;
-      height: ${props => props.theme.card.minHeight - 5}px;
+      width: ${(props) => props.theme.card.minWidth - 5}px;
+      height: ${(props) => props.theme.card.minHeight - 5}px;
     }
   }
   @media screen and (min-width: 1478px) and (max-width: 1500px) {
-    width: ${props => props.theme.card.minWidth + props.theme.spaces[4] * 2}px;
-    margin-right: ${props => props.theme.spaces[11] + 1}px;
+    width: ${(props) =>
+      props.theme.card.minWidth + props.theme.spaces[4] * 2}px;
+    margin-right: ${(props) => props.theme.spaces[11] + 1}px;
     .bp3-card {
-      width: ${props => props.theme.card.minWidth - 8}px;
-      height: ${props => props.theme.card.minHeight - 8}px;
+      width: ${(props) => props.theme.card.minWidth - 8}px;
+      height: ${(props) => props.theme.card.minHeight - 8}px;
     }
   }
 
   @media screen and (min-width: 1447px) and (max-width: 1477px) {
-    width: ${props => props.theme.card.minWidth + props.theme.spaces[3] * 2}px;
-    margin-right: ${props => props.theme.spaces[11] - 4}px;
+    width: ${(props) =>
+      props.theme.card.minWidth + props.theme.spaces[3] * 2}px;
+    margin-right: ${(props) => props.theme.spaces[11] - 4}px;
     .bp3-card {
-      width: ${props => props.theme.card.minWidth - 8}px;
-      height: ${props => props.theme.card.minHeight - 8}px;
+      width: ${(props) => props.theme.card.minWidth - 8}px;
+      height: ${(props) => props.theme.card.minHeight - 8}px;
     }
   }
 
   @media screen and (min-width: 1417px) and (max-width: 1446px) {
-    width: ${props => props.theme.card.minWidth + props.theme.spaces[3] * 2}px;
-    margin-right: ${props => props.theme.spaces[11] - 8}px;
+    width: ${(props) =>
+      props.theme.card.minWidth + props.theme.spaces[3] * 2}px;
+    margin-right: ${(props) => props.theme.spaces[11] - 8}px;
     .bp3-card {
-      width: ${props => props.theme.card.minWidth - 11}px;
-      height: ${props => props.theme.card.minHeight - 11}px;
+      width: ${(props) => props.theme.card.minWidth - 11}px;
+      height: ${(props) => props.theme.card.minHeight - 11}px;
     }
   }
 
   @media screen and (min-width: 1400px) and (max-width: 1417px) {
-    width: ${props => props.theme.card.minWidth + props.theme.spaces[2] * 2}px;
-    margin-right: ${props => props.theme.spaces[11] - 12}px;
+    width: ${(props) =>
+      props.theme.card.minWidth + props.theme.spaces[2] * 2}px;
+    margin-right: ${(props) => props.theme.spaces[11] - 12}px;
     .bp3-card {
-      width: ${props => props.theme.card.minWidth - 15}px;
-      height: ${props => props.theme.card.minHeight - 15}px;
+      width: ${(props) => props.theme.card.minWidth - 15}px;
+      height: ${(props) => props.theme.card.minHeight - 15}px;
     }
   }
 
   @media screen and (max-width: 1400px) {
-    width: ${props => props.theme.card.minWidth + props.theme.spaces[2] * 2}px;
-    margin-right: ${props => props.theme.spaces[11] - 16}px;
+    width: ${(props) =>
+      props.theme.card.minWidth + props.theme.spaces[2] * 2}px;
+    margin-right: ${(props) => props.theme.spaces[11] - 16}px;
     .bp3-card {
-      width: ${props => props.theme.card.minWidth - 15}px;
-      height: ${props => props.theme.card.minHeight - 15}px;
+      width: ${(props) => props.theme.card.minWidth - 15}px;
+      height: ${(props) => props.theme.card.minHeight - 15}px;
     }
   }
 `;
 
 const StyledDialog = styled(Dialog)<{ setMaxWidth?: boolean }>`
   && {
-    background: white;
-    & .bp3-dialog-header {
-      padding: ${props => props.theme.spaces[4]}px
-        ${props => props.theme.spaces[4]}px;
+    background: ${(props) => props.theme.colors.modal.bg};
+    & .${BlueprintClasses.DIALOG_HEADER} {
+      background: ${(props) => props.theme.colors.modal.bg};
+      padding: ${(props) => props.theme.spaces[4]}px
+        ${(props) => props.theme.spaces[4]}px;
     }
-    & .bp3-dialog-footer-actions {
+    & .${BlueprintClasses.DIALOG_FOOTER_ACTIONS} {
       display: block;
     }
-    ${props => props.setMaxWidth && `width: 100vh;`}
+    ${(props) => props.setMaxWidth && `width: 100vh;`}
+
+    .${BlueprintClasses.HEADING} {
+      color: ${(props) => props.theme.colors.modal.headerText};
+    }
   }
 `;
 
@@ -168,21 +190,22 @@ const LeftPaneWrapper = styled.div`
   top: 77px;
 `;
 const ApplicationContainer = styled.div`
-  height: calc(100vh - ${props => props.theme.homePage.search.height - 40}px);
+  height: calc(100vh - ${(props) => props.theme.homePage.search.height - 40}px);
   overflow: auto;
-  padding-right: ${props => props.theme.homePage.leftPane.rightMargin}px;
-  margin-top: ${props => props.theme.homePage.search.height}px;
-  margin-left: ${props =>
+  padding-right: ${(props) => props.theme.homePage.leftPane.rightMargin}px;
+  margin-top: ${(props) => props.theme.homePage.search.height}px;
+  margin-left: ${(props) =>
     props.theme.homePage.leftPane.width +
     props.theme.homePage.leftPane.rightMargin +
     props.theme.homePage.leftPane.leftPadding}px;
   width: calc(
     100% -
-      ${props =>
+      ${(props) =>
         props.theme.homePage.leftPane.width +
         props.theme.homePage.leftPane.rightMargin +
         props.theme.homePage.leftPane.leftPadding}px
   );
+  scroll-behavior: smooth;
 `;
 
 const ItemWrapper = styled.div`
@@ -259,7 +282,7 @@ const StyledAnchor = styled.a`
 
 const WorkpsacesNavigator = styled.div`
   overflow: auto;
-  height: calc(100vh - ${props => props.theme.homePage.header + 36 + 25}px);
+  height: calc(100vh - ${(props) => props.theme.homePage.header + 36 + 25}px);
 `;
 
 const textIconStyles = (props: { color: string; hover: string }) => {
@@ -284,7 +307,7 @@ const textIconStyles = (props: { color: string; hover: string }) => {
 };
 
 const NewWorkspaceWrapper = styled.div`
-  ${props => {
+  ${(props) => {
     return `${textIconStyles({
       color: props.theme.colors.applications.textColor,
       hover: props.theme.colors.applications.hover.textColor,
@@ -296,34 +319,57 @@ const ApplicationAddCardWrapper = styled(Card)`
   display: flex;
   flex-direction: column;
   justify-content: center;
-  background: ${props => props.theme.colors.applications.bg};
+  background: ${(props) => props.theme.colors.applications.bg};
   align-items: center;
-  width: ${props => props.theme.card.minWidth}px;
-  height: ${props => props.theme.card.minHeight}px;
+  width: ${(props) => props.theme.card.minWidth}px;
+  height: ${(props) => props.theme.card.minHeight}px;
   position: relative;
   box-shadow: none;
   border-radius: 0;
   padding: 0;
-  margin: ${props => props.theme.spaces[4]}px;
+  margin: ${(props) => props.theme.spaces[5]}px;
   a {
     display: block;
     position: absolute;
     left: 0;
     top: 0;
-    height: calc(100% - ${props => props.theme.card.titleHeight}px);
+    height: calc(100% - ${(props) => props.theme.card.titleHeight}px);
     width: 100%;
   }
   cursor: pointer;
   &:hover {
-    background: ${props => props.theme.colors.applications.hover.bg};
+    background: ${(props) => props.theme.colors.applications.hover.bg};
   }
-  ${props => {
+  ${(props) => {
     return `${textIconStyles({
       color: props.theme.colors.applications.textColor,
       hover: props.theme.colors.applications.hover.textColor,
     })}`;
   }}
 `;
+
+const OrgMenuItem = ({ org, isFetchingApplications, selected }: any) => {
+  const menuRef = useRef<HTMLAnchorElement>(null);
+  useEffect(() => {
+    if (selected) {
+      menuRef.current?.scrollIntoView({ behavior: "smooth" });
+      menuRef.current?.click();
+    }
+  }, [selected]);
+
+  return (
+    <MenuItem
+      ref={menuRef}
+      className={isFetchingApplications ? BlueprintClasses.SKELETON : ""}
+      icon="workspace"
+      key={org.organization.slug}
+      href={`${window.location.pathname}#${org.organization.slug}`}
+      text={org.organization.name}
+      ellipsize={20}
+      selected={selected}
+    />
+  );
+};
 
 function LeftPane() {
   const fetchedUserOrgs = useSelector(getUserApplicationsOrgs);
@@ -345,6 +391,9 @@ function LeftPane() {
     userOrgs = loadingUserOrgs as any;
   }
 
+  const location = useLocation();
+  const urlHash = location.hash.slice(1);
+
   return (
     <LeftPaneWrapper>
       <LeftPaneSection
@@ -360,15 +409,11 @@ function LeftPane() {
           {/* {CreateOrg} */}
           {userOrgs &&
             userOrgs.map((org: any) => (
-              <MenuItem
-                className={
-                  isFetchingApplications ? BlueprintClasses.SKELETON : ""
-                }
-                icon="workspace"
-                key={org.organization.id}
-                href={`${window.location.pathname}#${org.organization.name}`}
-                text={org.organization.name}
-                ellipsize={20}
+              <OrgMenuItem
+                key={org.organization.slug}
+                org={org}
+                isFetchingApplications={isFetchingApplications}
+                selected={urlHash === org.organization.slug}
               />
             ))}
         </WorkpsacesNavigator>
@@ -394,18 +439,9 @@ const OrgNameHolder = styled(Text)`
   align-items: center;
 `;
 
-const OrgNameInMenu = styled(Text)`
-  max-width: 100%;
-  text-overflow: ellipsis;
-  overflow: hidden;
-  white-space: nowrap;
-  display: block;
-  padding: 9px ${props => props.theme.spaces[6]}px;
-`;
-
 const OrgNameWrapper = styled.div<{ disabled?: boolean }>`
-cursor: ${props => (!props.disabled ? "pointer" : "inherit")};
-${props => {
+cursor: ${(props) => (!props.disabled ? "pointer" : "inherit")};
+${(props) => {
   const color = props.disabled
     ? props.theme.colors.applications.orgColor
     : props.theme.colors.applications.hover.orgColor[9];
@@ -416,10 +452,13 @@ ${props => {
 }}
 
 .${Classes.ICON} {
-  display: ${props => (!props.disabled ? "inline" : "none")};;
+  display: ${(props) => (!props.disabled ? "inline" : "none")};;
   margin-left: 8px;
-  color: ${props => props.theme.colors.applications.iconColor};
+  color: ${(props) => props.theme.colors.applications.iconColor};
 }
+`;
+const OrgRename = styled(EditableText)`
+  padding: 0 2px;
 `;
 
 const NoSearchResultImg = styled.img`
@@ -428,11 +467,13 @@ const NoSearchResultImg = styled.img`
 
 const ApplicationsSection = (props: any) => {
   const dispatch = useDispatch();
+  const themeDetails = useSelector(getThemeDetails);
+  const isSavingOrgInfo = useSelector(getIsSavingOrgInfo);
   const isFetchingApplications = useSelector(getIsFetchingApplications);
   const userOrgs = useSelector(getUserApplicationsOrgsList);
   const creatingApplicationMap = useSelector(getIsCreatingApplication);
   const currentUser = useSelector(getCurrentUser);
-  const deleteApplication = (applicationId: string, orgId: string) => {
+  const deleteApplication = (applicationId: string) => {
     if (applicationId && applicationId.length > 0) {
       dispatch({
         type: ReduxActionTypes.DELETE_APPLICATION_INIT,
@@ -455,17 +496,26 @@ const ApplicationsSection = (props: any) => {
 
   const [selectedOrgId, setSelectedOrgId] = useState<string | undefined>();
   const Form: any = OrgInviteUsersForm;
-  const OrgMenu = (props: {
+
+  const OrgNameChange = (newName: string, orgId: string) => {
+    dispatch(
+      saveOrg({
+        id: orgId as string,
+        name: newName,
+      }),
+    );
+  };
+
+  const OrgMenuTarget = (props: {
     orgName: string;
-    orgId: string;
     disabled?: boolean;
-    setSelectedOrgId: (orgId: string) => void;
+    orgSlug: string;
   }) => {
-    const { orgName, orgId, disabled } = props;
+    const { orgName, disabled, orgSlug } = props;
 
     const OrgName = (
       <OrgNameWrapper disabled={disabled} className="t--org-name">
-        <StyledAnchor id={orgName}></StyledAnchor>
+        <StyledAnchor id={orgSlug}></StyledAnchor>
         <OrgNameHolder
           type={TextType.H1}
           className={isFetchingApplications ? BlueprintClasses.SKELETON : ""}
@@ -480,50 +530,23 @@ const ApplicationsSection = (props: any) => {
         </OrgNameHolder>
       </OrgNameWrapper>
     );
-    return disabled ? (
-      OrgName
-    ) : (
-      <Menu
-        target={OrgName}
-        position={Position.BOTTOM_RIGHT}
-        className="t--org-name"
-      >
-        <OrgNameInMenu type={TextType.H5}>{orgName}</OrgNameInMenu>
-        <MenuItem
-          icon="general"
-          text="Organization Settings"
-          cypressSelector="t--org-setting"
-          onSelect={() =>
-            getOnSelectAction(DropdownOnSelectActions.REDIRECT, {
-              path: `/org/${orgId}/settings/general`,
-            })
-          }
-        />
-        <MenuItem
-          text="Share"
-          icon="share"
-          onSelect={() => setSelectedOrgId(orgId)}
-        ></MenuItem>
-        <MenuItem
-          icon="user"
-          text="Members"
-          onSelect={() =>
-            getOnSelectAction(DropdownOnSelectActions.REDIRECT, {
-              path: `/org/${orgId}/settings/members`,
-            })
-          }
-        />
-      </Menu>
-    );
+    return OrgName;
   };
 
   const createNewApplication = (applicationName: string, orgId: string) => {
-    console.log(applicationName, orgId);
+    const color = getRandomPaletteColor(
+      themeDetails.theme.colors.appCardColors,
+    );
+    const icon =
+      AppIconCollection[Math.floor(Math.random() * AppIconCollection.length)];
+
     return dispatch({
       type: ReduxActionTypes.CREATE_APPLICATION_INIT,
       payload: {
         applicationName,
         orgId,
+        icon,
+        color,
       },
     });
   };
@@ -554,7 +577,6 @@ const ApplicationsSection = (props: any) => {
     organizationsListComponent = updatedOrgs.map(
       (organizationObject: any, index: number) => {
         const { organization, applications, userRoles } = organizationObject;
-        const userProfiles = userRoles && userRoles.splice(5);
         const hasManageOrgPermissions = isPermitted(
           organization.userPermissions,
           PERMISSION_TYPE.MANAGE_ORGANIZATION,
@@ -563,12 +585,60 @@ const ApplicationsSection = (props: any) => {
           <OrgSection className="t--org-section" key={index}>
             <OrgDropDown>
               {(currentUser || isFetchingApplications) && (
-                <OrgMenu
-                  setSelectedOrgId={setSelectedOrgId}
-                  orgId={organization.id}
-                  orgName={organization.name}
-                  disabled={!hasManageOrgPermissions}
-                ></OrgMenu>
+                <Menu
+                  target={OrgMenuTarget({
+                    orgName: organization.name,
+                    disabled: !hasManageOrgPermissions,
+                    orgSlug: organization.slug,
+                  })}
+                  position={Position.BOTTOM_RIGHT}
+                  className="t--org-name"
+                  disabled={!hasManageOrgPermissions || isFetchingApplications}
+                >
+                  <OrgRename
+                    defaultValue={organization.name}
+                    editInteractionKind={EditInteractionKind.SINGLE}
+                    placeholder="Workspace name"
+                    hideEditIcon={false}
+                    isInvalid={(value: string) => {
+                      return notEmptyValidator(value).message;
+                    }}
+                    savingState={
+                      isSavingOrgInfo
+                        ? SavingState.STARTED
+                        : SavingState.NOT_STARTED
+                    }
+                    isEditingDefault={false}
+                    fill={true}
+                    onBlur={(value: string) => {
+                      OrgNameChange(value, organization.id);
+                    }}
+                  />
+                  <MenuItem
+                    icon="general"
+                    text="Organization Settings"
+                    cypressSelector="t--org-setting"
+                    onSelect={() =>
+                      getOnSelectAction(DropdownOnSelectActions.REDIRECT, {
+                        path: `/org/${organization.id}/settings/general`,
+                      })
+                    }
+                  />
+                  <MenuItem
+                    text="Share"
+                    icon="share"
+                    onSelect={() => setSelectedOrgId(organization.id)}
+                  ></MenuItem>
+                  <MenuItem
+                    icon="user"
+                    text="Members"
+                    onSelect={() =>
+                      getOnSelectAction(DropdownOnSelectActions.REDIRECT, {
+                        path: `/org/${organization.id}/settings/members`,
+                      })
+                    }
+                  />
+                </Menu>
               )}
 
               {hasManageOrgPermissions && (
@@ -592,17 +662,17 @@ const ApplicationsSection = (props: any) => {
                 !isFetchingApplications && (
                   <OrgShareUsers>
                     <UserImageContainer>
-                      {userRoles.map((el: UserRoles) => (
+                      {userRoles.slice(0, 5).map((el: UserRoles) => (
                         <ProfileImage
                           className="org-share-user-icons"
                           userName={el.name ? el.name : el.username}
                           key={el.username}
                         />
                       ))}
-                      {userProfiles && userProfiles.length > 0 ? (
+                      {userRoles.length > 5 ? (
                         <ProfileImage
                           className="org-share-user-icons"
-                          commonName={`+${userProfiles.length}`}
+                          commonName={`+${userRoles.length - 5}`}
                         />
                       ) : null}
                     </UserImageContainer>
@@ -674,7 +744,6 @@ const ApplicationsSection = (props: any) => {
                       <ApplicationCard
                         key={application.id}
                         application={application}
-                        orgId={organization.id}
                         delete={deleteApplication}
                         update={updateApplicationDispatch}
                         duplicate={duplicateApplicationDispatch}
@@ -734,6 +803,7 @@ class Applications extends Component<
   public render() {
     return (
       <PageWrapper displayName="Applications">
+        <ProductUpdatesModal />
         <LeftPane />
         <SubHeader
           search={{

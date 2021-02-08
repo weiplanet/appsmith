@@ -53,6 +53,7 @@ interface TableProps {
   selectedRowIndices: number[];
   disableDrag: () => void;
   enableDrag: () => void;
+  triggerRowSelection: boolean;
   searchTableData: (searchKey: any) => void;
   filters?: ReactTableFilter[];
   applyFilter: (filters: ReactTableFilter[]) => void;
@@ -64,7 +65,6 @@ interface TableProps {
 const defaultColumn = {
   minWidth: 30,
   width: 150,
-  maxWidth: 400,
 };
 
 export const Table = (props: TableProps) => {
@@ -75,7 +75,7 @@ export const Table = (props: TableProps) => {
     columnActions: props.columnActions,
     compactMode: props.compactMode,
   });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+
   const columns = React.useMemo(() => props.columns, [columnString]);
 
   const pageCount = Math.ceil(props.data.length / props.pageSize);
@@ -121,6 +121,7 @@ export const Table = (props: TableProps) => {
       height={props.height}
       tableSizes={tableSizes}
       id={`table${props.widgetId}`}
+      triggerRowSelection={props.triggerRowSelection}
       backgroundColor={Colors.ATHENS_GRAY_DARKER}
     >
       <TableHeader

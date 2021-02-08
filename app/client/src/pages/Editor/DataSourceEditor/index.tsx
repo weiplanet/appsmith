@@ -7,6 +7,7 @@ import {
   getPluginPackageFromId,
   getPluginImages,
   getDatasource,
+  getPlugin,
 } from "selectors/entitiesSelector";
 import {
   updateDatasource,
@@ -18,8 +19,18 @@ import {
 import { DATASOURCE_DB_FORM } from "constants/forms";
 import DatasourceHome from "./DatasourceHome";
 import DataSourceEditorForm from "./DBForm";
-import { Datasource } from "api/DatasourcesApi";
+import RestAPIDatasourceForm from "./RestAPIDatasourceForm";
+import { Datasource } from "entities/Datasource";
 import { RouteComponentProps } from "react-router";
+import EntityNotFoundPane from "pages/Editor/EntityNotFoundPane";
+import { PluginType } from "entities/Action";
+import { Spinner } from "@blueprintjs/core";
+import CenteredWrapper from "components/designSystems/appsmith/CenteredWrapper";
+import styled from "styled-components";
+
+export const LoadingContainer = styled(CenteredWrapper)`
+  height: 50%;
+`;
 
 interface ReduxStateProps {
   formData: Datasource;
@@ -33,6 +44,7 @@ interface ReduxStateProps {
   pluginImages: Record<string, string>;
   pluginId: string;
   viewMode: boolean;
+  pluginType: string;
 }
 
 type Props = ReduxStateProps &
@@ -84,41 +96,54 @@ class DataSourceEditor extends React.Component<Props> {
       pluginId,
       viewMode,
       setDatasourceEditorMode,
+      pluginType,
     } = this.props;
-
+    if (!pluginId && datasourceId) {
+      return <EntityNotFoundPane />;
+    }
+    if (!datasourceId) {
+      return (
+        <DatasourceHome
+          isSaving={isSaving}
+          applicationId={this.props.match.params.applicationId}
+          pageId={this.props.match.params.pageId}
+          history={this.props.history}
+          location={this.props.location}
+        />
+      );
+    }
+    if (loadingFormConfigs) {
+      return (
+        <LoadingContainer>
+          <Spinner size={30} />
+        </LoadingContainer>
+      );
+    }
+    const DatasourceForm =
+      pluginType === PluginType.API
+        ? RestAPIDatasourceForm
+        : DataSourceEditorForm;
     return (
-      <React.Fragment>
-        {datasourceId ? (
-          <DataSourceEditorForm
-            pluginImage={pluginImages[pluginId]}
-            applicationId={this.props.match.params.applicationId}
-            pageId={this.props.match.params.pageId}
-            isSaving={isSaving}
-            isTesting={isTesting}
-            isDeleting={isDeleting}
-            isNewDatasource={newDatasource === datasourceId}
-            onSubmit={this.handleSubmit}
-            onSave={this.handleSave}
-            onTest={this.props.testDatasource}
-            selectedPluginPackage={selectedPluginPackage}
-            datasourceId={datasourceId}
-            formData={formData}
-            loadingFormConfigs={loadingFormConfigs}
-            formConfig={formConfig}
-            handleDelete={deleteDatasource}
-            viewMode={viewMode}
-            setDatasourceEditorMode={setDatasourceEditorMode}
-          />
-        ) : (
-          <DatasourceHome
-            isSaving={isSaving}
-            applicationId={this.props.match.params.applicationId}
-            pageId={this.props.match.params.pageId}
-            history={this.props.history}
-            location={this.props.location}
-          />
-        )}
-      </React.Fragment>
+      <DatasourceForm
+        pluginImage={pluginImages[pluginId]}
+        applicationId={this.props.match.params.applicationId}
+        pageId={this.props.match.params.pageId}
+        isSaving={isSaving}
+        isTesting={isTesting}
+        isDeleting={isDeleting}
+        isNewDatasource={newDatasource === datasourceId}
+        onSubmit={this.handleSubmit}
+        onSave={this.handleSave}
+        onTest={this.props.testDatasource}
+        selectedPluginPackage={selectedPluginPackage}
+        datasourceId={datasourceId}
+        formData={formData}
+        formConfig={formConfig}
+        handleDelete={deleteDatasource}
+        viewMode={viewMode}
+        setDatasourceEditorMode={setDatasourceEditorMode}
+        pluginType={pluginType}
+      />
     );
   }
 }
@@ -129,11 +154,12 @@ const mapStateToProps = (state: AppState, props: any): ReduxStateProps => {
   const datasource = getDatasource(state, props.match.params.datasourceId);
   const { formConfigs, loadingFormConfigs } = plugins;
   const formData = getFormValues(DATASOURCE_DB_FORM)(state) as Datasource;
-
+  const pluginId = _.get(datasource, "pluginId", "");
+  const plugin = getPlugin(state, pluginId);
   return {
     pluginImages: getPluginImages(state),
     formData,
-    pluginId: _.get(datasource, "pluginId", ""),
+    pluginId,
     selectedPluginPackage: getPluginPackageFromId(
       state,
       datasourcePane.selectedPlugin,
@@ -141,10 +167,11 @@ const mapStateToProps = (state: AppState, props: any): ReduxStateProps => {
     isSaving: datasources.loading,
     isDeleting: datasources.isDeleting,
     isTesting: datasources.isTesting,
-    formConfig: formConfigs[datasourcePane.selectedPlugin] || [],
+    formConfig: formConfigs[pluginId] || [],
     loadingFormConfigs,
     newDatasource: datasourcePane.newDatasource,
     viewMode: datasourcePane.viewMode[datasource?.id ?? ""] ?? true,
+    pluginType: plugin?.type ?? "",
   };
 };
 

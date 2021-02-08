@@ -63,3 +63,15 @@ export const duplicateApplication = (applicationId: string) => {
     },
   };
 };
+
+export const getAllApplications = () => {
+  return {
+    type: ReduxActionTypes.GET_ALL_APPLICATION_INIT,
+  };
+};
+
+export const resetCurrentApplication = () => {
+  return {
+    type: ReduxActionTypes.RESET_CURRENT_APPLICATION,
+  };
+};

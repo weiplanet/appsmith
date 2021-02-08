@@ -16,9 +16,10 @@ import {
   fetchPublishedPageSuccess,
   savePageSuccess,
   setUrlData,
-  updateCanvas,
+  initCanvasLayout,
   updateCurrentPage,
   updateWidgetNameSuccess,
+  updateAndSaveLayout,
 } from "actions/pageActions";
 import PageApi, {
   ClonePageRequest,
@@ -47,16 +48,15 @@ import {
 } from "redux-saga/effects";
 import history from "utils/history";
 import { BUILDER_PAGE_URL } from "constants/routes";
-
+import { isNameValid } from "utils/helpers";
 import { extractCurrentDSL } from "utils/WidgetPropsUtils";
 import {
   getAllPageIds,
   getEditorConfigs,
-  getExistingActionNames,
   getExistingPageNames,
-  getExistingWidgetNames,
   getWidgets,
 } from "./selectors";
+import { getDataTree } from "selectors/dataTreeSelectors";
 import { validateResponse } from "./ErrorSagas";
 import { executePageLoadActions } from "actions/widgetActions";
 import { ApiResponse } from "api/ApiResponses";
@@ -71,11 +71,12 @@ import {
   setActionsToExecuteOnPageLoad,
 } from "actions/actionActions";
 import { APP_MODE, UrlDataState } from "reducers/entityReducers/appReducer";
-import { clearEvalCache } from "./evaluationsSaga";
+import { clearEvalCache } from "./EvaluationsSaga";
 import { getQueryParams } from "utils/AppsmithUtils";
 import PerformanceTracker, {
   PerformanceTransactionName,
 } from "utils/PerformanceTracker";
+import { WidgetTypes } from "constants/WidgetConstants";
 
 const getWidgetName = (state: AppState, widgetId: string) =>
   state.entities.canvasWidgets[widgetId];
@@ -96,7 +97,7 @@ export function* fetchPageListSaga(
     const isValidResponse = yield validateResponse(response);
     if (isValidResponse) {
       const orgId = response.data.organizationId;
-      const pages: PageListPayload = response.data.pages.map(page => ({
+      const pages: PageListPayload = response.data.pages.map((page) => ({
         pageName: page.name,
         pageId: page.id,
         isDefault: page.isDefault,
@@ -180,7 +181,7 @@ export function* fetchPageSaga(
       // Get Canvas payload
       const canvasWidgetsPayload = getCanvasWidgetsPayload(fetchPageResponse);
       // Update the canvas
-      yield put(updateCanvas(canvasWidgetsPayload));
+      yield put(initCanvasLayout(canvasWidgetsPayload));
       // set current page
       yield put(updateCurrentPage(id));
       // dispatch fetch page success
@@ -243,7 +244,7 @@ export function* fetchPublishedPageSaga(
       // Get Canvas payload
       const canvasWidgetsPayload = getCanvasWidgetsPayload(response);
       // Update the canvas
-      yield put(updateCanvas(canvasWidgetsPayload));
+      yield put(initCanvasLayout(canvasWidgetsPayload));
       // set current page
       yield put(updateCurrentPage(pageId));
       // dispatch fetch page success
@@ -327,7 +328,7 @@ function* savePageSaga() {
         savePageResponse.data.layoutOnLoadActions.length > 0
       ) {
         for (const actionSet of savePageResponse.data.layoutOnLoadActions) {
-          yield put(setActionsToExecuteOnPageLoad(actionSet.map(a => a.id)));
+          yield put(setActionsToExecuteOnPageLoad(actionSet.map((a) => a.id)));
         }
       }
       yield put(savePageSuccess(savePageResponse));
@@ -342,6 +343,7 @@ function* savePageSaga() {
         failed: true,
       },
     );
+
     yield put({
       type: ReduxActionErrorTypes.SAVE_PAGE_ERROR,
       payload: {
@@ -512,6 +514,8 @@ export function* clonePageSaga(clonePageAction: ReduxAction<ClonePageRequest>) {
         },
       });
 
+      yield put(fetchActionsForPage(response.data.id));
+
       history.push(BUILDER_PAGE_URL(applicationId, response.data.id));
     }
   } catch (error) {
@@ -524,54 +528,128 @@ export function* clonePageSaga(clonePageAction: ReduxAction<ClonePageRequest>) {
   }
 }
 
+/**
+ * this saga do two things
+ *
+ * 1. Checks if the name of page is conflicting with any used name
+ * 2. dispatches a action which triggers a request to update the name
+ *
+ * @param action
+ */
 export function* updateWidgetNameSaga(
   action: ReduxAction<{ id: string; newName: string }>,
 ) {
   try {
     const { widgetName } = yield select(getWidgetName, action.payload.id);
     const layoutId = yield select(getCurrentLayoutId);
+    const evalTree = yield select(getDataTree);
     const pageId = yield select(getCurrentPageId);
-    const existingWidgetNames = yield select(getExistingWidgetNames);
-    const existingActionNames = yield select(getExistingActionNames);
     const existingPageNames = yield select(getExistingPageNames);
-    const hasWidgetNameConflict =
-      existingWidgetNames.indexOf(action.payload.newName) > -1 ||
-      existingActionNames.indexOf(action.payload.newName) > -1 ||
-      existingPageNames.indexOf(action.payload.newName) > -1;
-    if (!hasWidgetNameConflict) {
-      const request: UpdateWidgetNameRequest = {
-        newName: action.payload.newName,
-        oldName: widgetName,
-        pageId,
-        layoutId,
-      };
-      const response: UpdateWidgetNameResponse = yield call(
-        PageApi.updateWidgetName,
-        request,
-      );
-      const isValidResponse = yield validateResponse(response);
-      if (isValidResponse) {
-        yield updateCanvasWithDSL(response.data, pageId, layoutId);
 
-        yield put(updateWidgetNameSuccess());
-        // Add this to the page DSLs for entity explorer
+    // TODO(abhinav): Why do we need to jump through these hoops just to
+    // change the tab name? Figure out a better design to make this moot.
+    const tabs:
+      | Array<{
+          id: string;
+          widgetId: string;
+          label: string;
+        }>
+      | undefined = yield select((state: AppState) => {
+      // Check if this widget exists in the canvas widgets
+      if (state.entities.canvasWidgets.hasOwnProperty(action.payload.id)) {
+        // If it does assign it to a variable
+        const widget = state.entities.canvasWidgets[action.payload.id];
+        // Check if this widget has a parent in the canvas widgets
+        if (
+          widget.parentId &&
+          state.entities.canvasWidgets.hasOwnProperty(widget.parentId)
+        ) {
+          // If the parent exists assign it to a variable
+          const parent = state.entities.canvasWidgets[widget.parentId];
+          // Check if this parent is a TABS_WIDGET
+          if (parent.type === WidgetTypes.TABS_WIDGET) {
+            // If it is return the tabs property
+            return parent.tabs;
+          }
+        }
+      }
+      // This isn't a tab in a tabs widget so return undefined
+      return;
+    });
+
+    // If we're trying to update the name of a tab in the TABS_WIDGET
+    if (tabs !== undefined) {
+      // Get all canvas widgets
+      const stateWidgets = yield select(getWidgets);
+      // Shallow copy canvas widgets as they're immutable
+      const widgets = { ...stateWidgets };
+      // Get the parent Id of the tab (canvas widget) whose name we're updating
+      const parentId = widgets[action.payload.id].parentId;
+      // Update the tabName property of the tab (canvas widget)
+      widgets[action.payload.id] = {
+        ...widgets[action.payload.id],
+        tabName: action.payload.newName,
+      };
+      // Shallow copy the parent widget so that we can update the properties
+      const parent = { ...widgets[parentId] };
+      // Update the tabs property of the parent tabs widget
+      parent.tabs = tabs.map(
+        (tab: { widgetId: string; label: string; id: string }) => {
+          if (tab.widgetId === action.payload.id) {
+            return { ...tab, label: action.payload.newName };
+          }
+          return tab;
+        },
+      );
+      // replace the parent widget in the canvas widgets
+      widgets[parentId] = parent;
+      // Update and save the new widgets
+      yield put(updateAndSaveLayout(widgets));
+      // Send a update saying that we've successfully updated the name
+      yield put(updateWidgetNameSuccess());
+    } else {
+      // check if name is not conflicting with any
+      // existing entity/api/queries/reserved words
+      if (
+        isNameValid(action.payload.newName, {
+          ...evalTree,
+          ...existingPageNames,
+        })
+      ) {
+        const request: UpdateWidgetNameRequest = {
+          newName: action.payload.newName,
+          oldName: widgetName,
+          pageId,
+          layoutId,
+        };
+        const response: UpdateWidgetNameResponse = yield call(
+          PageApi.updateWidgetName,
+          request,
+        );
+        const isValidResponse = yield validateResponse(response);
+        if (isValidResponse) {
+          yield updateCanvasWithDSL(response.data, pageId, layoutId);
+
+          yield put(updateWidgetNameSuccess());
+          // Add this to the page DSLs for entity explorer
+          yield put({
+            type: ReduxActionTypes.FETCH_PAGE_DSL_SUCCESS,
+            payload: {
+              pageId: pageId,
+              dsl: response.data.dsl,
+            },
+          });
+        }
+      } else {
         yield put({
-          type: ReduxActionTypes.FETCH_PAGE_DSL_SUCCESS,
+          type: ReduxActionErrorTypes.UPDATE_WIDGET_NAME_ERROR,
           payload: {
-            pageId: pageId,
-            dsl: response.data.dsl,
+            error: {
+              message: `Entity name: ${action.payload.newName} is already being used.`,
+            },
           },
         });
       }
-    } else {
-      yield put({
-        type: ReduxActionErrorTypes.UPDATE_WIDGET_NAME_ERROR,
-        payload: {
-          error: {
-            message: `Entity name: ${action.payload.newName} is already being used.`,
-          },
-        },
-      });
     }
   } catch (error) {
     yield put({
@@ -600,7 +678,7 @@ export function* updateCanvasWithDSL(
     pageActions: data.layoutOnLoadActions,
     widgets: normalizedWidgets.entities.canvasWidgets,
   };
-  yield put(updateCanvas(canvasWidgetsPayload));
+  yield put(initCanvasLayout(canvasWidgetsPayload));
   yield put(fetchActionsForPage(pageId));
 }
 

@@ -26,33 +26,47 @@ import { validateResponse } from "./ErrorSagas";
 import { getUserApplicationsOrgsList } from "selectors/applicationSelectors";
 import { ApiResponse } from "api/ApiResponses";
 import history from "utils/history";
-import { BUILDER_PAGE_URL } from "constants/routes";
+import {
+  BUILDER_PAGE_URL,
+  getApplicationViewerPageURL,
+} from "constants/routes";
 import { AppState } from "reducers";
 import {
   FetchApplicationPayload,
   setDefaultApplicationPageSuccess,
+  resetCurrentApplication,
 } from "actions/applicationActions";
 import AnalyticsUtil from "utils/AnalyticsUtil";
-import { AppToaster } from "components/editorComponents/ToastComponent";
 import {
   DELETING_APPLICATION,
   DUPLICATING_APPLICATION,
 } from "constants/messages";
+import { Toaster } from "components/ads/Toast";
 import { APP_MODE } from "../reducers/entityReducers/appReducer";
 import { Organization } from "constants/orgConstants";
+import { Variant } from "components/ads/common";
+import { AppIconName } from "components/ads/AppIcon";
+import { AppColorCode } from "constants/DefaultTheme";
+import {
+  getCurrentApplicationId,
+  getCurrentPageId,
+} from "selectors/editorSelectors";
+import { showCompletionDialog } from "./OnboardingSagas";
 
 const getDefaultPageId = (
   pages?: ApplicationPagePayload[],
 ): string | undefined => {
   let defaultPage: ApplicationPagePayload | undefined = undefined;
   if (pages) {
-    defaultPage = pages.find(page => page.isDefault);
+    defaultPage = pages.find((page) => page.isDefault);
     if (!defaultPage) {
       defaultPage = pages[0];
     }
   }
   return defaultPage ? defaultPage.id : undefined;
 };
+
+let windowReference: Window | null = null;
 
 export function* publishApplicationSaga(
   requestAction: ReduxAction<PublishApplicationRequest>,
@@ -68,6 +82,26 @@ export function* publishApplicationSaga(
       yield put({
         type: ReduxActionTypes.PUBLISH_APPLICATION_SUCCESS,
       });
+
+      const applicationId = yield select(getCurrentApplicationId);
+      const currentPageId = yield select(getCurrentPageId);
+      let appicationViewPageUrl = getApplicationViewerPageURL(
+        applicationId,
+        currentPageId,
+      );
+
+      const showOnboardingCompletionDialog = yield select(showCompletionDialog);
+      if (showOnboardingCompletionDialog) {
+        appicationViewPageUrl += "?onboardingComplete=true";
+      }
+
+      // If the tab is opened focus and reload else open in new tab
+      if (!windowReference || windowReference.closed) {
+        windowReference = window.open(appicationViewPageUrl, "_blank");
+      } else {
+        windowReference.location.reload();
+        windowReference.focus();
+      }
     }
   } catch (error) {
     yield put({
@@ -104,6 +138,11 @@ export function* getAllApplicationSaga() {
       yield put({
         type: ReduxActionTypes.FETCH_USER_APPLICATIONS_ORGS_SUCCESS,
         payload: organizationApplication,
+      });
+      const { newReleasesCount, releaseItems } = response.data || {};
+      yield put({
+        type: ReduxActionTypes.FETCH_RELEASES_SUCCESS,
+        payload: { newReleasesCount, releaseItems },
       });
     }
   } catch (error) {
@@ -186,14 +225,19 @@ export function* updateApplicationSaga(
       request,
     );
     const isValidResponse = yield validateResponse(response);
-    if (isValidResponse) {
+    if (isValidResponse && request && request.name) {
+      Toaster.show({
+        text: "Application name updated",
+        variant: Variant.success,
+      });
       yield put({
         type: ReduxActionTypes.UPDATE_APPLICATION_SUCCESS,
-        payload: response.data,
       });
-      AppToaster.show({
-        message: `Application updated`,
-        type: "success",
+    }
+    if (isValidResponse && request.currentApp) {
+      yield put({
+        type: ReduxActionTypes.CURRENT_APPLICATION_NAME_UPDATE,
+        payload: request.name,
       });
     }
   } catch (error) {
@@ -203,10 +247,6 @@ export function* updateApplicationSaga(
         error,
       },
     });
-    AppToaster.show({
-      message: error,
-      type: "error",
-    });
   }
 }
 
@@ -214,7 +254,9 @@ export function* deleteApplicationSaga(
   action: ReduxAction<DeleteApplicationRequest>,
 ) {
   try {
-    AppToaster.show({ message: DELETING_APPLICATION });
+    Toaster.show({
+      text: DELETING_APPLICATION,
+    });
     const request: DeleteApplicationRequest = action.payload;
     const response: ApiResponse = yield call(
       ApplicationApi.deleteApplication,
@@ -241,7 +283,9 @@ export function* duplicateApplicationSaga(
   action: ReduxAction<DeleteApplicationRequest>,
 ) {
   try {
-    AppToaster.show({ message: DUPLICATING_APPLICATION });
+    Toaster.show({
+      text: DUPLICATING_APPLICATION,
+    });
     const request: DuplicateApplicationRequest = action.payload;
     const response: ApiResponse = yield call(
       ApplicationApi.duplicateApplication,
@@ -306,12 +350,14 @@ export function* changeAppViewAccessSaga(
 export function* createApplicationSaga(
   action: ReduxAction<{
     applicationName: string;
+    icon: AppIconName;
+    color: AppColorCode;
     orgId: string;
     resolve: any;
     reject: any;
   }>,
 ) {
-  const { applicationName, orgId, reject } = action.payload;
+  const { applicationName, icon, color, orgId, reject } = action.payload;
   try {
     const userOrgs = yield select(getUserApplicationsOrgsList);
     const existingOrgs = userOrgs.filter(
@@ -335,8 +381,12 @@ export function* createApplicationSaga(
         },
       });
     } else {
+      yield put(resetCurrentApplication());
+
       const request: CreateApplicationRequest = {
         name: applicationName,
+        icon: icon,
+        color: color,
         orgId,
       };
       const response: CreateApplicationResponse = yield call(

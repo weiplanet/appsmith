@@ -36,7 +36,7 @@ const OptionWrapper = styled.div<{ selected: boolean }>`
   box-sizing: border-box;
   padding: 8px;
   color: ${Colors.OXFORD_BLUE};
-  opacity: ${props => (props.selected ? 1 : 0.7)};
+  opacity: ${(props) => (props.selected ? 1 : 0.7)};
   min-width: 200px;
   cursor: pointer;
   margin: 10px 10px 0 10px;
@@ -132,7 +132,9 @@ const TableColumnsVisibility = (props: TableColumnsVisibilityProps) => {
             selected={!option.isHidden}
             key={index}
             onClick={() => {
-              const hiddenColumns = props.hiddenColumns || [];
+              const hiddenColumns = Array.isArray(props.hiddenColumns)
+                ? props.hiddenColumns.slice()
+                : [];
               if (!option.isHidden) {
                 hiddenColumns.push(option.accessor);
               } else {

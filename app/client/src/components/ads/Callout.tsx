@@ -1,8 +1,7 @@
 import React from "react";
-import { CommonComponentProps, Classes } from "./common";
+import { CommonComponentProps, Classes, Variant } from "./common";
 import Text, { TextType } from "./Text";
 import styled from "styled-components";
-import { Variant } from "./Button";
 
 type CalloutProps = CommonComponentProps & {
   variant?: Variant;
@@ -14,13 +13,13 @@ const CalloutContainer = styled.div<{
   variant?: Variant;
   fill?: boolean;
 }>`
-  padding: ${props => props.theme.spaces[5]}px
-    ${props => props.theme.spaces[11] + 1}px;
-  background: ${props =>
+  padding: ${(props) => props.theme.spaces[5]}px
+    ${(props) => props.theme.spaces[11] + 1}px;
+  background: ${(props) =>
     props.variant ? props.theme.colors.callout[props.variant].bgColor : null};
   height: 42px;
 
-  ${props =>
+  ${(props) =>
     props.fill
       ? `
   display: flex;
@@ -30,7 +29,7 @@ const CalloutContainer = styled.div<{
       : null};
 
   .${Classes.TEXT} {
-    color: ${props =>
+    color: ${(props) =>
       props.variant ? props.theme.colors.callout[props.variant].color : null};
   }
 `;

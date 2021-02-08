@@ -27,10 +27,6 @@ import {
   ActionDescription,
   RunActionPayload,
 } from "entities/DataTree/dataTreeFactory";
-import {
-  AppToaster,
-  ToastTypeOptions,
-} from "components/editorComponents/ToastComponent";
 import { executeAction, executeActionError } from "actions/widgetActions";
 import {
   getCurrentApplicationId,
@@ -42,6 +38,7 @@ import AnalyticsUtil from "utils/AnalyticsUtil";
 import history from "utils/history";
 import {
   BUILDER_PAGE_URL,
+  convertToQueryParams,
   getApplicationViewerPageURL,
 } from "constants/routes";
 import {
@@ -50,7 +47,7 @@ import {
   showRunActionConfirmModal,
   updateAction,
 } from "actions/actionActions";
-import { Action, RestAction } from "entities/Action";
+import { Action } from "entities/Action";
 import ActionAPI, {
   ActionApiResponse,
   ActionResponse,
@@ -67,13 +64,15 @@ import {
 import { AppState } from "reducers";
 import { mapToPropList } from "utils/AppsmithUtils";
 import { validateResponse } from "sagas/ErrorSagas";
-import { ToastType, TypeOptions } from "react-toastify";
+import { TypeOptions } from "react-toastify";
 import { PLUGIN_TYPE_API } from "constants/ApiEditorConstants";
 import { DEFAULT_EXECUTE_ACTION_TIMEOUT_MS } from "constants/ApiConstants";
 import { updateAppStore } from "actions/pageActions";
 import { getAppStoreName } from "constants/AppConstants";
 import downloadjs from "downloadjs";
 import { getType, Types } from "utils/TypeHelpers";
+import { Toaster } from "components/ads/Toast";
+import { Variant } from "components/ads/common";
 import PerformanceTracker, {
   PerformanceTransactionName,
 } from "utils/PerformanceTracker";
@@ -82,44 +81,81 @@ import {
   getAppMode,
   getCurrentApplication,
 } from "selectors/applicationSelectors";
-import { evaluateDynamicTrigger, evaluateSingleValue } from "./evaluationsSaga";
+import {
+  evaluateDynamicTrigger,
+  evaluateActionBindings,
+} from "./EvaluationsSaga";
+import copy from "copy-to-clipboard";
+import { EMPTY_RESPONSE } from "../components/editorComponents/ApiResponseView";
+
+export enum NavigationTargetType {
+  SAME_WINDOW = "SAME_WINDOW",
+  NEW_WINDOW = "NEW_WINDOW",
+}
+
+const isValidUrlScheme = (url: string): boolean => {
+  return (
+    // Standard http call
+    url.startsWith("http://") ||
+    // Secure http call
+    url.startsWith("https://") ||
+    // Mail url to directly open email app prefilled
+    url.startsWith("mailto:") ||
+    // Tel url to directly open phone app prefilled
+    url.startsWith("tel:")
+  );
+};
 
 function* navigateActionSaga(
-  action: { pageNameOrUrl: string; params: Record<string, string> },
+  action: {
+    pageNameOrUrl: string;
+    params: Record<string, string>;
+    target?: NavigationTargetType;
+  },
   event: ExecuteActionPayloadEvent,
 ) {
   const pageList = yield select(getPageList);
   const applicationId = yield select(getCurrentApplicationId);
+  const {
+    pageNameOrUrl,
+    params,
+    target = NavigationTargetType.SAME_WINDOW,
+  } = action;
   const page = _.find(
     pageList,
-    (page: Page) => page.pageName === action.pageNameOrUrl,
+    (page: Page) => page.pageName === pageNameOrUrl,
   );
   if (page) {
     AnalyticsUtil.logEvent("NAVIGATE", {
-      pageName: action.pageNameOrUrl,
-      pageParams: action.params,
+      pageName: pageNameOrUrl,
+      pageParams: params,
     });
-    // TODO need to make this check via RENDER_MODE;
+    const appMode = yield select(getAppMode);
     const path =
-      history.location.pathname.indexOf("/edit") !== -1
-        ? BUILDER_PAGE_URL(applicationId, page.pageId, action.params)
-        : getApplicationViewerPageURL(
-            applicationId,
-            page.pageId,
-            action.params,
-          );
-    history.push(path);
+      appMode === APP_MODE.EDIT
+        ? BUILDER_PAGE_URL(applicationId, page.pageId, params)
+        : getApplicationViewerPageURL(applicationId, page.pageId, params);
+    if (target === NavigationTargetType.SAME_WINDOW) {
+      history.push(path);
+    } else if (target === NavigationTargetType.NEW_WINDOW) {
+      window.open(path, "_blank");
+    }
     if (event.callback) event.callback({ success: true });
   } else {
     AnalyticsUtil.logEvent("NAVIGATE", {
-      navUrl: action.pageNameOrUrl,
+      navUrl: pageNameOrUrl,
     });
+    let url = pageNameOrUrl + convertToQueryParams(params);
     // Add a default protocol if it doesn't exist.
-    let url = action.pageNameOrUrl;
-    if (url.indexOf("://") === -1) {
+    if (!isValidUrlScheme(url)) {
       url = "https://" + url;
     }
-    window.location.assign(url);
+    if (target === NavigationTargetType.SAME_WINDOW) {
+      window.location.assign(url);
+    } else if (target === NavigationTargetType.NEW_WINDOW) {
+      window.open(url, "_blank");
+    }
+    if (event.callback) event.callback({ success: true });
   }
 }
 
@@ -149,9 +185,9 @@ async function downloadSaga(
   try {
     const { data, name, type } = action;
     if (!name) {
-      AppToaster.show({
-        message: "Download failed. File name was not provided",
-        type: "error",
+      Toaster.show({
+        text: "Download failed. File name was not provided",
+        variant: Variant.danger,
       });
 
       if (event.callback) event.callback({ success: false });
@@ -166,11 +202,26 @@ async function downloadSaga(
     }
     if (event.callback) event.callback({ success: true });
   } catch (err) {
-    AppToaster.show({
-      message: `Download failed. ${err}`,
-      type: "error",
+    Toaster.show({
+      text: `Download failed. ${err}`,
+      variant: Variant.danger,
     });
     if (event.callback) event.callback({ success: false });
+  }
+}
+
+function* copySaga(
+  payload: {
+    data: string;
+    options: { debug: boolean; format: string };
+  },
+  event: ExecuteActionPayloadEvent,
+) {
+  const result = copy(payload.data, payload.options);
+  if (event.callback) {
+    if (result) {
+      event.callback({ success: result });
+    }
   }
 }
 
@@ -183,16 +234,31 @@ function* showAlertSaga(
     if (event.callback) event.callback({ success: false });
     return;
   }
-  if (payload.style && !ToastTypeOptions.includes(payload.style)) {
+  let variant;
+  switch (payload.style) {
+    case "info":
+      variant = Variant.info;
+      break;
+    case "success":
+      variant = Variant.success;
+      break;
+    case "warning":
+      variant = Variant.warning;
+      break;
+    case "error":
+      variant = Variant.danger;
+      break;
+  }
+  if (payload.style && !variant) {
     console.error(
-      "Toast type needs to be a one of " + ToastTypeOptions.join(", "),
+      "Toast type needs to be a one of " + Object.values(Variant).join(", "),
     );
     if (event.callback) event.callback({ success: false });
     return;
   }
-  AppToaster.show({
-    message: payload.message,
-    type: payload.style,
+  Toaster.show({
+    text: payload.message,
+    variant: variant,
   });
   if (event.callback) event.callback({ success: true });
 }
@@ -201,7 +267,10 @@ export const getActionTimeout = (
   state: AppState,
   actionId: string,
 ): number | undefined => {
-  const action = _.find(state.entities.actions, a => a.config.id === actionId);
+  const action = _.find(
+    state.entities.actions,
+    (a) => a.config.id === actionId,
+  );
   if (action) {
     const timeout = _.get(
       action,
@@ -226,65 +295,49 @@ const isErrorResponse = (response: ActionApiResponse) => {
   return !response.data.isExecutionSuccess;
 };
 
-export function* evaluateDynamicBoundValueSaga(path: string): any {
-  return yield call(evaluateSingleValue, `{{${path}}}`);
-}
-
-const EXECUTION_PARAM_PATH = "this.params";
-const getExecutionParamPath = (key: string) => `${EXECUTION_PARAM_PATH}.${key}`;
-
-export function* getActionParams(
+/**
+ * Api1
+ * URL: https://example.com/{{Text1.text}}
+ * Body: {
+ *     "name": "{{this.params.name}}",
+ *     "age": {{this.params.age}},
+ *     "gender": {{Dropdown1.selectedOptionValue}}
+ * }
+ *
+ * If you call
+ * Api1.run(undefined, undefined, { name: "Hetu", age: Input1.text });
+ *
+ * executionParams is { name: "Hetu", age: Input1.text }
+ * bindings is [
+ *   "Text1.text",
+ *   "Dropdown1.selectedOptionValue",
+ *   "this.params.name",
+ *   "this.params.age",
+ * ]
+ *
+ * Return will be [
+ *   { key: "Text1.text", value: "updateUser" },
+ *   { key: "Dropdown1.selectedOptionValue", value: "M" },
+ *   { key: "this.params.name", value: "Hetu" },
+ *   { key: "this.params.age", value: 26 },
+ * ]
+ * @param bindings
+ * @param executionParams
+ */
+export function* evaluateActionParams(
   bindings: string[] | undefined,
-  executionParams?: Record<string, any>,
+  executionParams?: Record<string, any> | string,
 ) {
-  if (_.isNil(bindings)) return [];
-  let dataTreeBindings = bindings;
+  if (_.isNil(bindings) || bindings.length === 0) return [];
 
-  if (executionParams && Object.keys(executionParams).length) {
-    // List of params in the path format
-    const executionParamsPathList = Object.keys(executionParams).map(
-      getExecutionParamPath,
-    );
-    const paramSearchRegex = new RegExp(executionParamsPathList.join("|"), "g");
-    // Bindings with references to execution params
-    const executionBindings = bindings.filter(binding =>
-      paramSearchRegex.test(binding),
-    );
-
-    // Replace references with values
-    const replacedBindings = executionBindings.map(binding => {
-      let replaced = binding;
-      const matches = binding.match(paramSearchRegex);
-      if (matches && matches.length) {
-        matches.forEach(match => {
-          // we add one for substring index to account for '.'
-          const paramKey = match.substring(EXECUTION_PARAM_PATH.length + 1);
-          let paramValue = executionParams[paramKey];
-          if (paramValue) {
-            if (typeof paramValue === "object") {
-              paramValue = JSON.stringify(paramValue);
-            }
-            replaced = replaced.replace(match, paramValue);
-          }
-        });
-      }
-      return replaced;
-    });
-    // Replace binding with replaced bindings for evaluation
-    dataTreeBindings = dataTreeBindings.map(key => {
-      if (executionBindings.includes(key)) {
-        return replacedBindings[executionBindings.indexOf(key)];
-      }
-      return key;
-    });
-  }
-  // Evaluate all values
-  const values: any = yield all(
-    dataTreeBindings.map((binding: string) => {
-      return call(evaluateDynamicBoundValueSaga, binding);
-    }),
+  // Evaluated all bindings of the actions. Pass executionParams if any
+  const values: any = yield call(
+    evaluateActionBindings,
+    bindings,
+    executionParams,
   );
-  // convert to object and transform non string values
+
+  // Convert to object and transform non string values
   const actionParams: Record<string, string> = {};
   bindings.forEach((key, i) => {
     let value = values[i];
@@ -296,11 +349,11 @@ export function* getActionParams(
 
 export function extractBindingsFromAction(action: Action) {
   const bindings: string[] = [];
-  action.dynamicBindingPathList.forEach(a => {
+  action.dynamicBindingPathList.forEach((a) => {
     const value = _.get(action, a.key);
     if (isDynamicValue(value)) {
       const { jsSnippets } = getDynamicBindings(value);
-      bindings.push(...jsSnippets.filter(jsSnippet => !!jsSnippet));
+      bindings.push(...jsSnippets.filter((jsSnippet) => !!jsSnippet));
     }
   });
   return bindings;
@@ -318,14 +371,16 @@ export function* executeActionSaga(
     },
     actionId,
   );
+  const appMode = yield select(getAppMode);
   try {
-    const api: RestAction = yield select(getAction, actionId);
+    const api: Action = yield select(getAction, actionId);
     const currentApp: ApplicationPayload = yield select(getCurrentApplication);
     AnalyticsUtil.logEvent("EXECUTE_ACTION", {
       type: api.pluginType,
       name: api.name,
       pageId: api.pageId,
       appId: currentApp.id,
+      appMode: appMode,
       appName: currentApp.name,
       isExampleApp: currentApp.appIsExample,
     });
@@ -341,7 +396,7 @@ export function* executeActionSaga(
 
     yield put(executeApiActionRequest({ id: apiAction.actionId }));
     const actionParams: Property[] = yield call(
-      getActionParams,
+      evaluateActionParams,
       api.jsonPathKeys,
       params,
     );
@@ -351,7 +406,6 @@ export function* executeActionSaga(
         : event.type === EventType.ON_PREV_PAGE
         ? "PREV"
         : undefined;
-    const appMode = yield select(getAppMode);
 
     const executeActionRequest: ExecuteActionRequest = {
       actionId: actionId,
@@ -385,7 +439,7 @@ export function* executeActionSaga(
               ...event,
               type: EventType.ON_ERROR,
             },
-            responseData: payload,
+            responseData: [payload.body, params],
           }),
         );
       } else {
@@ -393,10 +447,9 @@ export function* executeActionSaga(
           event.callback({ success: false });
         }
       }
-      AppToaster.show({
-        message:
-          api.name + " failed to execute. Please check it's configuration",
-        type: "error",
+      Toaster.show({
+        text: api.name + " failed to execute. Please check it's configuration",
+        variant: Variant.danger,
       });
     } else {
       PerformanceTracker.stopAsyncTracking(
@@ -412,7 +465,7 @@ export function* executeActionSaga(
               ...event,
               type: EventType.ON_SUCCESS,
             },
-            responseData: payload,
+            responseData: [payload.body, params],
           }),
         );
       } else {
@@ -427,11 +480,15 @@ export function* executeActionSaga(
       executeActionError({
         actionId: actionId,
         error,
+        data: {
+          ...EMPTY_RESPONSE,
+          body: "There was an error executing this action",
+        },
       }),
     );
-    AppToaster.show({
-      message: "Action execution failed",
-      type: "error",
+    Toaster.show({
+      text: "Action execution failed",
+      variant: Variant.danger,
     });
     if (onError) {
       yield put(
@@ -441,7 +498,7 @@ export function* executeActionSaga(
             ...event,
             type: EventType.ON_ERROR,
           },
-          responseData: {},
+          responseData: [],
         }),
       );
     } else {
@@ -481,21 +538,13 @@ function* executeActionTriggers(
       case "DOWNLOAD":
         yield call(downloadSaga, trigger.payload, event);
         break;
+      case "COPY_TO_CLIPBOARD":
+        yield call(copySaga, trigger.payload, event);
+        break;
       default:
-        yield put(
-          executeActionError({
-            error: "Trigger type unknown",
-            actionId: "",
-          }),
-        );
+        log.error("Trigger type unknown", trigger.type);
     }
   } catch (e) {
-    yield put(
-      executeActionError({
-        error: "Failed to execute action",
-        actionId: "",
-      }),
-    );
     if (event.callback) event.callback({ success: false });
   }
 }
@@ -562,7 +611,7 @@ function* runActionSaga(
 
     const { paginationField } = reduxAction.payload;
 
-    const params = yield call(getActionParams, jsonPathKeys);
+    const params = yield call(evaluateActionParams, jsonPathKeys);
     const timeout = yield select(getActionTimeout, actionId);
     const appMode = yield select(getAppMode);
     const viewMode = appMode === APP_MODE.PUBLISHED;
@@ -597,14 +646,14 @@ function* runActionSaga(
         payload: { [actionId]: payload },
       });
       if (payload.isExecutionSuccess) {
-        AppToaster.show({
-          message: "Action ran successfully",
-          type: ToastType.SUCCESS,
+        Toaster.show({
+          text: "Action ran successfully",
+          variant: Variant.success,
         });
       } else {
-        AppToaster.show({
-          message: "Action returned an error response",
-          type: ToastType.WARNING,
+        Toaster.show({
+          text: "Action returned an error response",
+          variant: Variant.warning,
         });
       }
     } else {
@@ -638,69 +687,99 @@ function* confirmRunActionSaga() {
 }
 
 function* executePageLoadAction(pageAction: PageAction) {
-  PerformanceTracker.startAsyncTracking(
-    PerformanceTransactionName.EXECUTE_ACTION,
-    {
+  try {
+    PerformanceTracker.startAsyncTracking(
+      PerformanceTransactionName.EXECUTE_ACTION,
+      {
+        actionId: pageAction.id,
+      },
+      pageAction.id,
+      PerformanceTransactionName.EXECUTE_PAGE_LOAD_ACTIONS,
+    );
+    const pageId = yield select(getCurrentPageId);
+    let currentApp: ApplicationPayload = yield select(getCurrentApplication);
+    currentApp = currentApp || {};
+    yield put(executeApiActionRequest({ id: pageAction.id }));
+    const params: Property[] = yield call(
+      evaluateActionParams,
+      pageAction.jsonPathKeys,
+    );
+    const appMode = yield select(getAppMode);
+    const viewMode = appMode === APP_MODE.PUBLISHED;
+    const executeActionRequest: ExecuteActionRequest = {
       actionId: pageAction.id,
-    },
-    pageAction.id,
-    PerformanceTransactionName.EXECUTE_PAGE_LOAD_ACTIONS,
-  );
-  const pageId = yield select(getCurrentPageId);
-  let currentApp: ApplicationPayload = yield select(getCurrentApplication);
-  currentApp = currentApp || {};
-  yield put(executeApiActionRequest({ id: pageAction.id }));
-  const params: Property[] = yield call(
-    getActionParams,
-    pageAction.jsonPathKeys,
-  );
-  const appMode = yield select(getAppMode);
-  const viewMode = appMode === APP_MODE.PUBLISHED;
-  const executeActionRequest: ExecuteActionRequest = {
-    actionId: pageAction.id,
-    params,
-    viewMode,
-  };
-  AnalyticsUtil.logEvent("EXECUTE_ACTION", {
-    type: pageAction.pluginType,
-    name: pageAction.name,
-    pageId: pageId,
-    appId: currentApp.id,
-    onPageLoad: true,
-    appName: currentApp.name,
-    isExampleApp: currentApp.appIsExample,
-  });
-  const response: ActionApiResponse = yield ActionAPI.executeAction(
-    executeActionRequest,
-    pageAction.timeoutInMillisecond,
-  );
-  if (isErrorResponse(response)) {
+      params,
+      viewMode,
+    };
+    AnalyticsUtil.logEvent("EXECUTE_ACTION", {
+      type: pageAction.pluginType,
+      name: pageAction.name,
+      pageId: pageId,
+      appMode: appMode,
+      appId: currentApp.id,
+      onPageLoad: true,
+      appName: currentApp.name,
+      isExampleApp: currentApp.appIsExample,
+    });
+    const response: ActionApiResponse = yield ActionAPI.executeAction(
+      executeActionRequest,
+      pageAction.timeoutInMillisecond,
+    );
+    if (isErrorResponse(response)) {
+      let body = _.get(response, "data.body");
+      let message = `The action "${pageAction.name}" has failed.`;
+      if (body) {
+        if (_.isObject(body)) {
+          body = JSON.stringify(body);
+        }
+        message += `\nERROR: "${body}"`;
+      }
+
+      yield put(
+        executeActionError({
+          actionId: pageAction.id,
+          isPageLoad: true,
+          error: _.get(response, "responseMeta.error", {
+            message,
+          }),
+          data: createActionExecutionResponse(response),
+        }),
+      );
+      PerformanceTracker.stopAsyncTracking(
+        PerformanceTransactionName.EXECUTE_ACTION,
+        {
+          failed: true,
+        },
+        pageAction.id,
+      );
+    } else {
+      const payload = createActionExecutionResponse(response);
+      PerformanceTracker.stopAsyncTracking(
+        PerformanceTransactionName.EXECUTE_ACTION,
+        undefined,
+        pageAction.id,
+      );
+      yield put(
+        executeApiActionSuccess({
+          id: pageAction.id,
+          response: payload,
+          isPageLoad: true,
+        }),
+      );
+      yield take(ReduxActionTypes.SET_EVALUATED_TREE);
+    }
+  } catch (e) {
     yield put(
       executeActionError({
         actionId: pageAction.id,
-        error: response.responseMeta.error,
         isPageLoad: true,
-      }),
-    );
-    PerformanceTracker.stopAsyncTracking(
-      PerformanceTransactionName.EXECUTE_ACTION,
-      {
-        failed: true,
-      },
-      pageAction.id,
-    );
-  } else {
-    const payload = createActionExecutionResponse(response);
-    PerformanceTracker.stopAsyncTracking(
-      PerformanceTransactionName.EXECUTE_ACTION,
-      undefined,
-      pageAction.id,
-    );
-    yield put(
-      executeApiActionSuccess({
-        id: pageAction.id,
-        response: payload,
-        isPageLoad: true,
+        error: {
+          message: `The action "${pageAction.name}" has failed.`,
+        },
+        data: {
+          ...EMPTY_RESPONSE,
+          body: "There was an error executing this action",
+        },
       }),
     );
   }
@@ -717,7 +796,7 @@ function* executePageLoadActionsSaga(action: ReduxAction<PageAction[][]>) {
     for (const actionSet of pageActions) {
       // Load all sets in parallel
       yield* yield all(
-        actionSet.map(apiAction => call(executePageLoadAction, apiAction)),
+        actionSet.map((apiAction) => call(executePageLoadAction, apiAction)),
       );
     }
     PerformanceTracker.stopAsyncTracking(
@@ -725,9 +804,10 @@ function* executePageLoadActionsSaga(action: ReduxAction<PageAction[][]>) {
     );
   } catch (e) {
     log.error(e);
-    AppToaster.show({
-      message: "Failed to load onPageLoad actions",
-      type: ToastType.ERROR,
+
+    Toaster.show({
+      text: "Failed to load onPageLoad actions",
+      variant: Variant.danger,
     });
   }
 }

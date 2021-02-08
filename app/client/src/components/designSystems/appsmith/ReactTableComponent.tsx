@@ -32,6 +32,7 @@ export interface ColumnMenuSubOptionProps {
   onClick?: (columnIndex: number) => void;
   id?: string;
   category?: boolean;
+  isHeader?: boolean;
 }
 
 interface ReactTableComponentProps {
@@ -63,6 +64,7 @@ interface ReactTableComponentProps {
   multiRowSelection?: boolean;
   hiddenColumns?: string[];
   columnNameMap?: { [key: string]: string };
+  triggerRowSelection: boolean;
   columnTypeMap?: {
     [key: string]: {
       type: string;
@@ -146,10 +148,9 @@ const ReactTableComponent = (props: ReactTableComponentProps) => {
         header.parentElement.className = "th header-reorder";
         if (i !== dragged && dragged !== -1) {
           e.preventDefault();
-          let columnOrder = props.columnOrder;
-          if (columnOrder === undefined) {
-            columnOrder = props.columns.map(item => item.accessor);
-          }
+          const columnOrder = props.columnOrder
+            ? [...props.columnOrder]
+            : props.columns.map((item) => item.accessor);
           const draggedColumn = props.columns[dragged].accessor;
           columnOrder.splice(dragged, 1);
           columnOrder.splice(i, 0, draggedColumn);
@@ -204,7 +205,7 @@ const ReactTableComponent = (props: ReactTableComponentProps) => {
         props.handleReorderColumn(columnOrder);
       }
     } else {
-      hiddenColumns = hiddenColumns.filter(item => {
+      hiddenColumns = hiddenColumns.filter((item) => {
         return item !== column.accessor;
       });
     }
@@ -275,9 +276,15 @@ const ReactTableComponent = (props: ReactTableComponentProps) => {
 
   const handleResizeColumn = (columnIndex: number, columnWidth: string) => {
     const column = props.columns[columnIndex];
-    const columnSizeMap = props.columnSizeMap || {};
     const width = Number(columnWidth.split("px")[0]);
-    columnSizeMap[column.accessor] = width;
+    const columnSizeMap = props.columnSizeMap
+      ? {
+          ...props.columnSizeMap,
+          [column.accessor]: width,
+        }
+      : {
+          [column.accessor]: width,
+        };
     props.handleResizeColumn(columnSizeMap);
   };
 
@@ -313,6 +320,7 @@ const ReactTableComponent = (props: ReactTableComponentProps) => {
       pageNo={props.pageNo - 1}
       updatePageNo={props.updatePageNo}
       columnActions={props.columnActions}
+      triggerRowSelection={props.triggerRowSelection}
       nextPageClick={() => {
         props.nextPageClick();
       }}

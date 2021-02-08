@@ -18,6 +18,7 @@ import com.appsmith.server.helpers.PluginExecutorHelper;
 import com.appsmith.server.repositories.OrganizationRepository;
 import com.appsmith.server.repositories.PluginRepository;
 import lombok.extern.slf4j.Slf4j;
+import net.minidev.json.JSONArray;
 import net.minidev.json.JSONObject;
 import org.junit.After;
 import org.junit.Before;
@@ -34,8 +35,11 @@ import org.springframework.test.context.junit4.SpringRunner;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import static com.appsmith.server.acl.AclPermission.READ_ACTIONS;
 import static com.appsmith.server.acl.AclPermission.READ_PAGES;
@@ -85,7 +89,7 @@ public class LayoutActionServiceTest {
     @Before
     @WithUserDetails(value = "api_user")
     public void setup() {
-
+        newPageService.deleteAll();
         User apiUser = userService.findByEmail("api_user").block();
         String orgId = apiUser.getOrganizationIds().iterator().next();
         Organization organization = organizationService.getById(orgId).block();
@@ -101,7 +105,12 @@ public class LayoutActionServiceTest {
             testPage = newPageService.findPageById(pageId, READ_PAGES, false).block();
 
             Layout layout = testPage.getLayouts().get(0);
-            JSONObject dsl = new JSONObject(Map.of("text", "{{ query1.data }}"));
+            JSONObject dsl = new JSONObject();
+            dsl.put("widgetName", "firstWidget");
+            JSONArray temp = new JSONArray();
+            temp.addAll(List.of(new JSONObject(Map.of("key", "testField"))));
+            dsl.put("dynamicBindingPathList", temp);
+            dsl.put("testField", "{{ query1.data }}");
             layout.setDsl(dsl);
             layout.setPublishedDsl(dsl);
             layoutActionService.updateLayout(pageId, layout.getId(), layout).block();
@@ -124,7 +133,6 @@ public class LayoutActionServiceTest {
         applicationPageService.deleteApplication(testApp.getId()).block();
         testApp = null;
         testPage = null;
-
     }
 
     @Test
@@ -140,8 +148,26 @@ public class LayoutActionServiceTest {
         action.setActionConfiguration(actionConfiguration);
         action.setDatasource(datasource);
 
+        ActionDTO unreferencedAction = new ActionDTO();
+        unreferencedAction.setName("query2");
+        unreferencedAction.setPageId(testPage.getId());
+        unreferencedAction.setUserSetOnLoad(true);
+        ActionConfiguration actionConfiguration2 = new ActionConfiguration();
+        actionConfiguration2.setHttpMethod(HttpMethod.GET);
+        unreferencedAction.setActionConfiguration(actionConfiguration2);
+        unreferencedAction.setDatasource(datasource);
+
         Mono<PageDTO> resultMono = newActionService
                 .createAction(action)
+                .flatMap(savedAction -> {
+                    ActionDTO updates = new ActionDTO();
+                    updates.setExecuteOnLoad(true);
+                    updates.setPolicies(null);
+                    updates.setUserPermissions(null);
+                    updates.setDatasource(datasource);
+                    return layoutActionService.updateAction(savedAction.getId(), updates);
+                })
+                .flatMap(savedAction -> newActionService.createAction(unreferencedAction))
                 .flatMap(savedAction -> {
                     ActionDTO updates = new ActionDTO();
                     updates.setExecuteOnLoad(true);
@@ -157,7 +183,9 @@ public class LayoutActionServiceTest {
                 .assertNext(page -> {
                     assertThat(page.getLayouts()).hasSize(1);
                     assertThat(page.getLayouts().get(0).getLayoutOnLoadActions()).hasSize(1);
-                    assertThat(page.getLayouts().get(0).getLayoutOnLoadActions().get(0).iterator().next().getName()).isEqualTo("query1");
+                    Set<DslActionDTO> dslActionDTOS = page.getLayouts().get(0).getLayoutOnLoadActions().get(0);
+                    assertThat(dslActionDTOS).hasSize(2);
+                    assertThat(dslActionDTOS.stream().map(dto -> dto.getName()).collect(Collectors.toSet())).containsAll(Set.of("query1", "query2"));
                 })
                 .verifyComplete();
     }
@@ -175,7 +203,13 @@ public class LayoutActionServiceTest {
         action.setActionConfiguration(actionConfiguration);
         action.setDatasource(datasource);
 
-        JSONObject dsl = new JSONObject(Map.of("widgetName", "firstWidget", "mustacheProp", "{{ beforeNameChange.data }}"));
+        JSONObject dsl = new JSONObject();
+        dsl.put("widgetName", "firstWidget");
+        JSONArray temp = new JSONArray();
+        temp.addAll(List.of(new JSONObject(Map.of("key", "testField"))));
+        dsl.put("dynamicBindingPathList", temp);
+        dsl.put("testField", "{{ beforeNameChange.data }}");
+
         Layout layout = testPage.getLayouts().get(0);
         layout.setDsl(dsl);
         layout.setPublishedDsl(dsl);
@@ -196,18 +230,19 @@ public class LayoutActionServiceTest {
         Mono<NewAction> postNameChangeActionMono = newActionService.findById(createdAction.getId(), READ_ACTIONS);
 
         StepVerifier
-               .create(postNameChangeActionMono)
-               .assertNext(updatedAction -> {
+                .create(postNameChangeActionMono)
+                .assertNext(updatedAction -> {
 
-                   assertThat(updatedAction.getUnpublishedAction().getName()).isEqualTo("PostNameChange");
+                    assertThat(updatedAction.getUnpublishedAction().getName()).isEqualTo("PostNameChange");
 
-                   DslActionDTO actionDTO = postNameChangeLayout.getLayoutOnLoadActions().get(0).iterator().next();
-                   assertThat(actionDTO.getName()).isEqualTo("PostNameChange");
+                    DslActionDTO actionDTO = postNameChangeLayout.getLayoutOnLoadActions().get(0).iterator().next();
+                    assertThat(actionDTO.getName()).isEqualTo("PostNameChange");
 
-                   JSONObject newDsl = new JSONObject(Map.of("widgetName", "firstWidget", "mustacheProp", "{{ PostNameChange.data }}"));
-                   assertThat(postNameChangeLayout.getDsl()).isEqualTo(newDsl);
-               })
-               .verifyComplete();
-
+//                    JSONObject newDsl = new JSONObject(Map.of("widgetName", "firstWidget", "mustacheProp", "{{ PostNameChange.data }}"));
+                    dsl.put("testField", "{{ PostNameChange.data }}");
+                    assertThat(postNameChangeLayout.getDsl()).isEqualTo(dsl);
+                })
+                .verifyComplete();
     }
+
 }

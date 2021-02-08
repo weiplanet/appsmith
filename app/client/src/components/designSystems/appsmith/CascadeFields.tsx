@@ -28,6 +28,9 @@ const StyledRemoveIcon = styled(
   padding: 0;
   position: relative;
   cursor: pointer;
+  &.hide-icon {
+    display: none;
+  }
 `;
 
 const LabelWrapper = styled.div`
@@ -46,7 +49,7 @@ const FieldWrapper = styled.div`
 `;
 
 const DropdownWrapper = styled.div<{ width: number }>`
-  width: ${props => props.width}px;
+  width: ${(props) => props.width}px;
   margin-left: 10px;
 `;
 
@@ -243,10 +246,10 @@ const RenderOptions = (props: {
   useEffect(() => {
     if (props.value && props.columns) {
       const selectedOptions = props.columns.filter(
-        i => i.value === props.value,
+        (i) => i.value === props.value,
       );
       if (selectedOptions && selectedOptions.length) {
-        selectValue(selectedOptions[0].value);
+        selectValue(selectedOptions[0].label);
       } else {
         selectValue(props.placeholder);
       }
@@ -290,6 +293,7 @@ type CascadeFieldProps = {
   value: any;
   operator: Operator;
   index: number;
+  hasAnyFilters: boolean;
   applyFilter: (filter: ReactTableFilter, index: number) => void;
   removeFilter: (index: number) => void;
 };
@@ -447,7 +451,7 @@ const CascadeField = (props: CascadeFieldProps) => {
 };
 
 const Fields = (props: CascadeFieldProps & { state: CascadeFieldState }) => {
-  const { index, removeFilter, applyFilter } = props;
+  const { index, removeFilter, applyFilter, hasAnyFilters } = props;
   const [state, dispatch] = React.useReducer(CaseCaseFieldReducer, props.state);
   const handleRemoveFilter = () => {
     dispatch({ type: CascadeFieldActionTypes.DELETE_FILTER });
@@ -515,7 +519,9 @@ const Fields = (props: CascadeFieldProps & { state: CascadeFieldState }) => {
         height={16}
         width={16}
         color={Colors.RIVER_BED}
-        className="t--table-filter-remove-btn"
+        className={`t--table-filter-remove-btn ${
+          hasAnyFilters ? "" : "hide-icon"
+        }`}
       />
       {index === 1 ? (
         <DropdownWrapper width={75}>

@@ -41,6 +41,7 @@ const StoreAsDatasource = () => {
   const MenuContainer = (
     <StyledMenu>
       <StyledMenuItem
+        textClassName="t--store-as-datasource"
         icon={
           <IconWrapper
             width={theme.fontSizes[4]}
@@ -65,7 +66,8 @@ const StoreAsDatasource = () => {
         portalClassName="helper-tooltip"
       >
         <div
-          onMouseDown={e => {
+          className="t--store-as-datasource-menu"
+          onMouseDown={(e) => {
             e.stopPropagation();
           }}
         >

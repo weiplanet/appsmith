@@ -2,13 +2,15 @@ package com.external.plugins;
 
 import com.appsmith.external.models.ActionConfiguration;
 import com.appsmith.external.models.ActionExecutionResult;
-import com.appsmith.external.models.AuthenticationDTO;
+import com.appsmith.external.models.DBAuth;
 import com.appsmith.external.models.DatasourceConfiguration;
 import com.appsmith.external.models.Endpoint;
+import com.appsmith.external.exceptions.pluginExceptions.AppsmithPluginException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import lombok.extern.slf4j.Slf4j;
+import org.bson.types.ObjectId;
 import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
@@ -105,8 +107,8 @@ public class MssqlPluginTest {
     }
 
     private DatasourceConfiguration createDatasourceConfiguration() {
-        AuthenticationDTO authDTO = new AuthenticationDTO();
-        authDTO.setAuthType(AuthenticationDTO.Type.USERNAME_PASSWORD);
+        DBAuth authDTO = new DBAuth();
+        authDTO.setAuthType(DBAuth.Type.USERNAME_PASSWORD);
         authDTO.setUsername(username);
         authDTO.setPassword(password);
 
@@ -121,7 +123,7 @@ public class MssqlPluginTest {
     }
 
     @Test
-    public void testConnectPostgresContainer() {
+    public void testConnectMsSqlContainer() {
 
         DatasourceConfiguration dsConfig = createDatasourceConfiguration();
 
@@ -199,6 +201,22 @@ public class MssqlPluginTest {
                     );
                 })
                 .verifyComplete();
+    }
+
+    @Test
+    public void invalidTestConnectMsSqlContainer() {
+
+        DatasourceConfiguration dsConfig = createDatasourceConfiguration();
+        // Set up random username and password and try to connect
+        DBAuth auth = (DBAuth) dsConfig.getAuthentication();
+        auth.setUsername(new ObjectId().toString());
+        auth.setPassword(new ObjectId().toString());
+
+        Mono<Connection> dsConnectionMono = pluginExecutor.datasourceCreate(dsConfig);
+
+        StepVerifier.create(dsConnectionMono)
+                .expectErrorMatches(throwable -> throwable instanceof AppsmithPluginException)
+                .verify();
     }
 
 }

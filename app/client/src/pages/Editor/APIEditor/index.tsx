@@ -22,7 +22,7 @@ import {
   getIsEditorInitialized,
 } from "selectors/editorSelectors";
 import { Plugin } from "api/PluginApi";
-import { RapidApiAction, RestAction, PaginationType } from "entities/Action";
+import { RapidApiAction, Action, PaginationType } from "entities/Action";
 import { getApiName } from "selectors/formSelectors";
 import Spinner from "components/editorComponents/Spinner";
 import styled from "styled-components";
@@ -32,6 +32,7 @@ import PerformanceTracker, {
   PerformanceTransactionName,
 } from "utils/PerformanceTracker";
 import * as Sentry from "@sentry/react";
+import EntityNotFoundPane from "pages/Editor/EntityNotFoundPane";
 import { ApplicationPayload } from "constants/ReduxActionConstants";
 
 const LoadingContainer = styled(CenteredWrapper)`
@@ -49,7 +50,7 @@ interface ReduxStateProps {
   pages: any;
   plugins: Plugin[];
   pluginId: any;
-  apiAction: RestAction | ActionData | RapidApiAction | undefined;
+  apiAction: Action | ActionData | RapidApiAction | undefined;
   paginationType: PaginationType;
   isEditorInitialized: boolean;
 }
@@ -118,14 +119,14 @@ class ApiEditor extends React.Component<Props> {
     id: string,
     plugins: Plugin[],
   ): string | undefined => {
-    const plugin = plugins.find(plugin => plugin.id === id);
+    const plugin = plugins.find((plugin) => plugin.id === id);
     if (!plugin) return undefined;
     return plugin.uiComponent;
   };
 
   getPluginUiComponentOfName = (plugins: Plugin[]): string | undefined => {
     const plugin = plugins.find(
-      plugin => plugin.packageName === REST_PLUGIN_PACKAGE_NAME,
+      (plugin) => plugin.packageName === REST_PLUGIN_PACKAGE_NAME,
     );
     if (!plugin) return undefined;
     return plugin.uiComponent;
@@ -144,6 +145,9 @@ class ApiEditor extends React.Component<Props> {
       paginationType,
       isEditorInitialized,
     } = this.props;
+    if (!this.props.pluginId && this.props.match.params.apiId) {
+      return <EntityNotFoundPane />;
+    }
     if (isCreating || !isEditorInitialized) {
       return (
         <LoadingContainer>

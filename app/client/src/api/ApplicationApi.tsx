@@ -1,6 +1,8 @@
 import Api from "./Api";
 import { ApiResponse } from "./ApiResponses";
 import { AxiosPromise } from "axios";
+import { AppColorCode } from "constants/DefaultTheme";
+import { AppIconName } from "components/ads/AppIcon";
 
 export interface PublishApplicationRequest {
   applicationId: string;
@@ -44,6 +46,8 @@ export interface CreateApplicationResponse extends ApiResponse {
 export interface CreateApplicationRequest {
   name: string;
   orgId: string;
+  color?: AppColorCode;
+  icon?: AppIconName;
 }
 
 export interface SetDefaultPageRequest {
@@ -67,6 +71,7 @@ export type UpdateApplicationPayload = {
   icon?: string;
   color?: string;
   name?: string;
+  currentApp?: boolean;
 };
 
 export type UpdateApplicationRequest = UpdateApplicationPayload & {
@@ -101,6 +106,8 @@ export interface FetchUsersApplicationsOrgsResponse extends ApiResponse {
   data: {
     organizationApplications: Array<OrganizationApplicationObject>;
     user: string;
+    newReleasesCount: string;
+    releaseItems: Array<Record<string, any>>;
   };
 }
 
@@ -148,7 +155,7 @@ class ApplicationApi extends Api {
     return Api.post(
       ApplicationApi.baseURL +
         ApplicationApi.createApplicationPath(request.orgId),
-      { name: request.name },
+      { name: request.name, color: request.color, icon: request.icon },
     );
   }
 

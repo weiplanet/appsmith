@@ -18,7 +18,7 @@ const FIELD_VALUES: Record<
     isVisible: "boolean",
   },
   DATE_PICKER_WIDGET: {
-    defaultDate: "Date",
+    defaultDate: "string", //TODO:Vicky validate this property
     isRequired: "boolean",
     isVisible: "boolean",
     isDisabled: "boolean",
@@ -31,6 +31,7 @@ const FIELD_VALUES: Record<
     exportPDF: "boolean",
     exportExcel: "boolean",
     exportCsv: "boolean",
+    defaultSelectedRow: "string",
     // onRowSelected: "Function Call",
     // onPageChange: "Function Call",
   },
@@ -98,6 +99,7 @@ const FIELD_VALUES: Record<
     // onClick: "Function Call",
   },
   MAP_WIDGET: {
+    mapCenter: "{ lat: number, long: number }",
     defaultMarkers: "Array<{ lat: number, long: number }>",
     enableSearch: "boolean",
     enablePickLocation: "boolean",

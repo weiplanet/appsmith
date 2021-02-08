@@ -9,7 +9,6 @@ import moment from "moment";
 
 const initialState: EditorReduxState = {
   initialized: false,
-  initializationError: false,
   loadingStates: {
     publishing: false,
     publishingError: false,
@@ -62,15 +61,6 @@ const editorReducer = createReducer(initialState, {
       isPageSwitching: false,
     },
   }),
-  [ReduxActionErrorTypes.INITIALIZE_EDITOR_ERROR]: (
-    state: EditorReduxState,
-  ) => {
-    return {
-      ...state,
-      initializationError: true,
-      initialized: false,
-    };
-  },
   [ReduxActionTypes.PUBLISH_APPLICATION_INIT]: (state: EditorReduxState) => {
     state.loadingStates.publishing = true;
     state.loadingStates.publishingError = false;
@@ -98,12 +88,12 @@ const editorReducer = createReducer(initialState, {
     state.loadingStates.saving = false;
     return { ...state };
   },
-  [ReduxActionTypes.SAVE_PAGE_ERROR]: (state: EditorReduxState) => {
+  [ReduxActionErrorTypes.SAVE_PAGE_ERROR]: (state: EditorReduxState) => {
     state.loadingStates.saving = false;
     state.loadingStates.savingError = true;
     return { ...state };
   },
-  [ReduxActionTypes.UPDATE_CANVAS]: (
+  [ReduxActionTypes.INIT_CANVAS_LAYOUT]: (
     state: EditorReduxState,
     action: ReduxAction<UpdateCanvasPayload>,
   ) => {
@@ -174,7 +164,6 @@ const editorReducer = createReducer(initialState, {
 
 export interface EditorReduxState {
   initialized: boolean;
-  initializationError: boolean;
   pageWidgetId?: string;
   currentLayoutId?: string;
   currentPageName?: string;
